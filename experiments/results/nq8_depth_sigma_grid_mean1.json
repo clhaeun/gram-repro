@@ -1,0 +1,70 @@
+{
+  "checkpoint": "checkpoints/Nqueens-8-ACT-torch/gram_nq8_mean1/step_17085",
+  "n": 8,
+  "grid": {
+    "depth1_sigma0.0": {
+      "valid_rate": 0.0,
+      "consistent_rate": 0.0,
+      "strict_rate": 0.0,
+      "queen_count_mean": 0.0,
+      "queen_count_min": 0,
+      "queen_count_max": 0,
+      "n_invalid": 772,
+      "fail_count_ok": 772,
+      "fail_row": 0,
+      "fail_col": 0,
+      "fail_diag1": 0,
+      "fail_diag2": 0,
+      "right_count_but_invalid": 0,
+      "observed_steps": 1
+    },
+    "depth1_sigma1.0": {
+      "valid_rate": 0.0,
+      "consistent_rate": 0.0,
+      "strict_rate": 0.0,
+      "queen_count_mean": 0.689119170984456,
+      "queen_count_min": 0,
+      "queen_count_max": 4,
+      "n_invalid": 772,
+      "fail_count_ok": 772,
+      "fail_row": 12,
+      "fail_col": 11,
+      "fail_diag1": 7,
+      "fail_diag2": 8,
+      "right_count_but_invalid": 0,
+      "observed_steps": 1
+    },
+    "depth16_sigma0.0": {
+      "valid_rate": 0.0,
+      "consistent_rate": 0.0,
+      "strict_rate": 0.0,
+      "queen_count_mean": 0.0,
+      "queen_count_min": 0,
+      "queen_count_max": 0,
+      "n_invalid": 772,
+      "fail_count_ok": 772,
+      "fail_row": 0,
+      "fail_col": 0,
+      "fail_diag1": 0,
+      "fail_diag2": 0,
+      "right_count_but_invalid": 0,
+      "observed_steps": 16
+    },
+    "depth16_sigma1.0": {
+      "valid_rate": 0.0,
+      "consistent_rate": 0.0,
+      "strict_rate": 0.0,
+      "queen_count_mean": 1.5582901554404145,
+      "queen_count_min": 0,
+      "queen_count_max": 5,
+      "n_invalid": 772,
+      "fail_count_ok": 772,
+      "fail_row": 65,
+      "fail_col": 68,
+      "fail_diag1": 32,
+      "fail_diag2": 48,
+      "right_count_but_invalid": 0,
+      "observed_steps": 16
+    }
+  }
+}

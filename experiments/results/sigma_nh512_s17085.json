@@ -1,0 +1,20 @@
+{
+  "checkpoint": "checkpoints/Nqueens-8-ACT-torch/gram_nq8_mean_nh512/step_17085",
+  "n": 256,
+  "source": "measured from checkpoint weights (no sigma record exists in the training log)",
+  "prior": {
+    "n_reparameterize_calls": 48,
+    "std_mean": 0.4284977378944556,
+    "std_p50": 0.37397589658697444,
+    "std_mean_min": 0.3481495976448059,
+    "std_mean_max": 0.49753642082214355
+  },
+  "posterior": {
+    "n_reparameterize_calls": 48,
+    "std_mean": 0.38103012305994827,
+    "std_p50": 0.3698259262988965,
+    "std_mean_min": 0.35192248225212097,
+    "std_mean_max": 0.4212947487831116,
+    "kl_per_sample_sum": 256.15533447265625
+  }
+}

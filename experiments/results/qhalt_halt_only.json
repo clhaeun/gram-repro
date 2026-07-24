@@ -1,0 +1,17 @@
+{
+  "checkpoint": "checkpoints/Sudoku-extreme-1k-aug-1000-test10k-ACT-torch/gram_sudoku_halt_only/step_65100",
+  "data": "data/sudoku-extreme-1k-aug-1000-test10k",
+  "n": 512,
+  "path": "posterior",
+  "halt_max_steps": 16,
+  "q_halt_fire_rate_by_step": [
+    0.224609375,
+    0.537109375,
+    0.6171875
+  ],
+  "q_halt_logit_mean_by_step": [
+    -3.2361106872558594,
+    -0.2958412170410156,
+    0.2862281799316406
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "checkpoint": "checkpoints/Nqueens-8-ACT-torch/gram_nq8_mean1/step_17085",
+  "n": 8,
+  "posterior": {
+    "n_eval": 772,
+    "valid_rate": 1.0,
+    "consistent_rate": 1.0,
+    "strict_rate": 1.0,
+    "queen_count_mean": 8.0,
+    "queen_count_min": 8,
+    "queen_count_max": 8
+  },
+  "prior": {
+    "n_eval": 772,
+    "valid_rate": 0.0,
+    "consistent_rate": 0.0,
+    "strict_rate": 0.0,
+    "queen_count_mean": 1.5582901554404145,
+    "queen_count_min": 0,
+    "queen_count_max": 5
+  }
+}

@@ -1,0 +1,38 @@
+name: recursive_reasoning.gram@TinyRecursiveReasoningModel_ACTV1
+loss:
+  name: losses@ACTLossHead
+  loss_type: stablemax_cross_entropy
+
+halt_exploration_prob: 0.1
+halt_max_steps: 16
+
+# GRAM's (T, K): T = H_cycles outer transitions, K = L_cycles inner refinements
+H_cycles: 3
+L_cycles: 4
+
+H_layers: 0
+L_layers: 2
+
+hidden_size: 512
+num_heads: 8
+expansion: 4
+
+puzzle_emb_ndim: ${.hidden_size}
+
+# N-Queens uses the attention core: the sudoku-only mlp_t exception is off here,
+# and positions are encoded with rope rather than being dropped.
+mlp_t: False
+pos_encodings: rope
+forward_dtype: bfloat16
+
+puzzle_emb_len: 16
+no_ACT_continue: True
+
+# GRAM용
+kl_coef: 0.07       # KL 가중치 (beta) -- swept over {0.045, 0.07, 0.1}
+kl_balance: 0.8     # KL balancing 비율
+kl_reduction: sum   # L축 reduction. halt_only(71.85%)=sum, lmean_v2(1.8%)=mean
+lprm_coef: 1.0
+
+
+noise_head_expansion: 1.5

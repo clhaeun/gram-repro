@@ -17,7 +17,9 @@ import coolname
 import hydra
 import pydantic
 from omegaconf import DictConfig
-from adam_atan2 import AdamATan2
+# from adam_atan2 import AdamATan2
+from torch.optim import AdamW
+
 
 from puzzle_dataset import PuzzleDataset, PuzzleDatasetConfig, PuzzleDatasetMetadata
 from utils.functions import load_model_class, get_model_source_path
@@ -147,12 +149,13 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
     # Optimizers and lr
     if config.arch.puzzle_emb_ndim == 0:
         optimizers = [
-            AdamATan2(
+            AdamW(
                 model.parameters(),
                 lr=0,  # Needs to be set by scheduler
                 weight_decay=config.weight_decay,
                 betas=(config.beta1, config.beta2)
             )
+
         ]
         optimizer_lrs = [
             config.lr
@@ -177,7 +180,7 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
                 weight_decay=config.puzzle_emb_weight_decay,
                 world_size=world_size
             ),
-            AdamATan2(
+            AdamW(
                 model.parameters(),
                 lr=0,  # Needs to be set by scheduler
                 weight_decay=config.weight_decay,
@@ -232,13 +235,14 @@ def init_train_state(config: PretrainConfig, train_metadata: PuzzleDatasetMetada
     )
 
 
-def save_train_state(config: PretrainConfig, train_state: TrainState):
+def save_train_state(config: PretrainConfig, train_state: TrainState, suffix: str = ""):
     # FIXME: Only saved model.
     if config.checkpoint_path is None:
         return
 
     os.makedirs(config.checkpoint_path, exist_ok=True)
-    torch.save(train_state.model.state_dict(), os.path.join(config.checkpoint_path, f"step_{train_state.step}"))
+    torch.save(train_state.model.state_dict(),
+               os.path.join(config.checkpoint_path, f"step_{train_state.step}{suffix}"))
 
 
 def load_checkpoint(model: nn.Module, config: PretrainConfig):
@@ -309,7 +313,10 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
         for param in train_state.model.parameters():
             if param.grad is not None:
                 dist.all_reduce(param.grad)
-            
+
+    # gradient clipping 1.0
+    torch.nn.utils.clip_grad_norm_(train_state.model.parameters(), 1.0)
+
     # Apply optimizer
     lr_this_step = None    
     for optim, base_lr in zip(train_state.optimizers, train_state.optimizer_lrs):
@@ -337,10 +344,30 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
             
             # Postprocess
             count = max(reduced_metrics["count"], 1)  # Avoid NaNs
-            reduced_metrics = {f"train/{k}": v / (global_batch_size if k.endswith("loss") else count) for k, v in reduced_metrics.items()}
+
+            def _denom(k):
+                # diag/* arrive as per-rank batch means, so dist.reduce's sum only
+                # needs undoing by world_size.  Everything else is a sum over
+                # examples: losses normalise by batch, metrics by halted count.
+                if k.startswith("diag/"):
+                    return world_size
+                return global_batch_size if k.endswith("loss") else count
+
+            reduced_metrics = {f"train/{k}": v / _denom(k) for k, v in reduced_metrics.items()}
 
             reduced_metrics["train/lr"] = lr_this_step
             return reduced_metrics
+
+def flatten_metrics(metrics: dict, prefix: str = "") -> dict:
+    """evaluate() returns {set_name: {metric: value}}; flatten to {set_name/metric: float}."""
+    flat = {}
+    for k, v in metrics.items():
+        if isinstance(v, dict):
+            flat.update(flatten_metrics(v, f"{prefix}{k}/"))
+        else:
+            flat[f"{prefix}{k}"] = float(v)
+    return flat
+
 
 def evaluate(
     config: PretrainConfig,
@@ -510,6 +537,12 @@ def save_code_and_config(config: PretrainConfig):
     # Log code
     wandb.run.log_code(config.checkpoint_path)
 
+    # Explicit per-file snapshot of the two files that define GRAM's behaviour,
+    # so a run's arch/loss source is recoverable straight from the wandb run.
+    for code_file in code_list:
+        if code_file is not None and os.path.exists(code_file):
+            wandb.save(code_file, base_path=os.path.dirname(os.path.abspath(code_file)), policy="now")
+
 
 def load_synced_config(hydra_config: DictConfig, rank: int, world_size: int) -> PretrainConfig:
     objects = [None]
@@ -609,6 +642,9 @@ def launch(hydra_config: DictConfig):
             if RANK == 0 and metrics is not None:
                 wandb.log(metrics, step=train_state.step)
                 progress_bar.update(train_state.step - progress_bar.n)  # type: ignore
+                if train_state.step % 50 == 0:
+                    _log = {k: float(v) for k, v in metrics.items() if ('loss' in k or 'accuracy' in k)}
+                    print(f"[step {train_state.step}] " + " ".join(f"{k}={v:.4f}" for k, v in _log.items()) + f" lr={float(metrics.get('train/lr', 0.0)):.2e}", flush=True)
             if config.ema:
                 ema_helper.update(train_state.model)
 
@@ -617,9 +653,10 @@ def launch(hydra_config: DictConfig):
             if RANK == 0:
                 print("EVALUATE")
             if config.ema:
-                print("SWITCH TO EMA")
+                print("SWITCH TO EMA (bias-corrected)")
                 train_state_eval = copy.deepcopy(train_state)
-                train_state_eval.model = ema_helper.ema_copy(train_state_eval.model)
+                # bias-corrected EMA: removes the surviving mu^step * w0 init term
+                train_state_eval.model = ema_helper.ema_copy(train_state_eval.model, step=train_state.step)
             else:
                 train_state_eval = train_state
             train_state_eval.model.eval()
@@ -633,13 +670,26 @@ def launch(hydra_config: DictConfig):
                 cpu_group=CPU_PROCESS_GROUP)
 
             if RANK == 0 and metrics is not None:
-                wandb.log(metrics, step=train_state.step)
-                
+                # wandb-only mirror under eval/*, plus a token_accuracy alias for the
+                # existing (token-level) `accuracy`.  The printed line below keeps
+                # using the raw metric dict so the stdout format is unchanged.
+                flat = flatten_metrics(metrics)
+                mirror = {f"eval/{k}": v for k, v in flat.items()}
+                for k, v in flat.items():
+                    if k.endswith("/accuracy"):
+                        mirror[f"eval/{k[:-len('accuracy')]}token_accuracy"] = v
+                wandb.log({**metrics, **mirror}, step=train_state.step)
+                print(f"[EVAL @ step {train_state.step}] " + " ".join(f"{k}={v:.4f}" for k, v in sorted(flatten_metrics(metrics).items())), flush=True)
+
             ############ Checkpointing
             if RANK == 0:
                 print("SAVE CHECKPOINT")
             if RANK == 0 and (config.checkpoint_every_eval or (_iter_id == total_iters - 1)):
-                save_train_state(config, train_state_eval)
+                save_train_state(config, train_state_eval)                       # step_N = (bias-corrected) EMA
+                if config.ema:
+                    # also persist the raw live (non-EMA) SGD weights, so EMA
+                    # effects can be separated from path effects post-hoc.
+                    save_train_state(config, train_state, suffix=".live")        # step_N.live
 
             if config.ema:
                 del train_state_eval

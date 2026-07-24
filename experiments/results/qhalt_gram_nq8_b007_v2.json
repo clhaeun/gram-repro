@@ -1,0 +1,17 @@
+{
+  "checkpoint": "checkpoints/Nqueens-8-ACT-torch/gram_nq8_b007_v2/step_17085",
+  "data": "data/nqueens-8",
+  "n": 512,
+  "path": "posterior",
+  "halt_max_steps": 16,
+  "q_halt_fire_rate_by_step": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "q_halt_logit_mean_by_step": [
+    -17.2041015625,
+    -17.177490234375,
+    -17.180908203125
+  ]
+}

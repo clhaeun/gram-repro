@@ -1,0 +1,87 @@
+# ============================================================
+#  TinyRecursiveModels / GRAM  —  .gitignore
+#  원칙: 가벼운 코드는 Git, 무거운 산출물은 rsync
+# ============================================================
+
+# --- 대용량 산출물 (rsync 로 전송) ---
+# gitignore 는 줄 끝 주석을 지원하지 않는다. 패턴 줄에 주석 붙이지 말 것.
+# checkpoints 17G / data 2.6G / wandb 219M / logs 61M
+checkpoints/
+data/
+wandb/
+logs/
+outputs/
+
+# --- 모델/텐서 바이너리 (경로 무관 방어) ---
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.npy
+*.npz
+*.h5
+*.pkl
+
+# --- 파이썬 캐시 ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# --- 가상환경 ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- 수동 백업 파일 (.bak_MMDD_HHMM 패턴) ---
+*.bak
+*.bak_*
+*.orig
+*.rej
+*~
+*.swp
+*.swo
+
+# --- 테스트/커버리지/린트 캐시 ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# --- 에디터 / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- 자격증명 (실수 방지) ---
+.env
+*.pem
+*.key
+.netrc
+wandb/settings
+
+# --- 기타 임시 ---
+tmp/
+temp/
+nohup.out
+core.*
+
+# ============================================================
+#  예외: 아래는 반드시 추적할 것
+# ============================================================
+!.gitignore
+!requirements.txt
+!requirements-full.txt
+!dataset/build_*.py
+!exp/*.sh
+!exp/*.py
+!experiments/*.py

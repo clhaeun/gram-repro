@@ -1,20 +1,45 @@
-torch
-adam-atan2
-einops
-tqdm
-coolname
-pydantic
-argdantic
-wandb
-omegaconf
-hydra-core
-huggingface_hub
-packaging 
-ninja 
-wheel 
-setuptools 
-setuptools-scm
-pydantic-core
-huggingface_hub 
-numba
-triton
+# TinyRecursiveModels / GRAM 실험 환경
+# 추출: 2026-07-24  |  Python 3.11.10  |  CUDA 12.4  |  RTX 3090 x8
+#
+# torch 계열은 cu124 인덱스가 필요하다. 아래 순서로 설치할 것:
+#   pip install --index-url https://download.pytorch.org/whl/cu124 \
+#       torch==2.5.1+cu124 torchvision==0.20.1+cu124 torchaudio==2.5.1+cu124
+#   pip install -r requirements.txt
+#
+# 전체 환경 스냅샷은 requirements-full.txt 참고 (그대로 설치하면 안 됨).
+
+# --- 딥러닝 코어 (위 인덱스로 별도 설치) ---
+torch==2.5.1+cu124
+triton==3.1.0
+
+# --- 수치 연산 ---
+numpy==2.1.2
+numba==0.66.0
+llvmlite==0.48.0
+einops==0.8.2
+
+# --- 설정 / CLI ---
+hydra-core==1.3.4
+omegaconf==2.3.1
+pydantic==2.13.4
+pydantic_core==2.46.4
+pydantic-settings==2.14.2
+argdantic==1.3.3
+PyYAML==6.0.2
+
+# --- 로깅 / 실험 관리 ---
+wandb==0.28.0
+tqdm==4.66.5
+coolname==5.0.0
+huggingface_hub==1.22.0
+
+# --- 빌드 도구 ---
+packaging==24.1
+ninja==1.11.1.1
+wheel==0.47.0
+setuptools==83.0.0
+setuptools-scm==10.2.0
+
+# --- 선택 사항 ---
+# adam_atan2==0.0.3   # pretrain.py:20 에서 주석 처리됨. 되살릴 때만 설치.
+# flash-attn          # models/layers.py 에서 주석 처리됨. SDPA 폴백 사용 중.

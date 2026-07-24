@@ -1,0 +1,164 @@
+{
+  "n": 1000,
+  "N": 20,
+  "task": "sudoku",
+  "single": 0.018,
+  "mean_sample": 0.0166,
+  "by_k": {
+    "1": {
+      "majority": 0.018,
+      "pass": 0.0166,
+      "pass_first_k": 0.018,
+      "verifier_selected": 0.018,
+      "lprm_best": 0.018,
+      "distinct": 1.0,
+      "verifier_hit_rate": 0.018
+    },
+    "5": {
+      "majority": 0.021,
+      "pass": 0.02307901186790506,
+      "pass_first_k": 0.023,
+      "verifier_selected": 0.023,
+      "lprm_best": 0.017,
+      "distinct": 4.831,
+      "verifier_hit_rate": 0.023
+    },
+    "10": {
+      "majority": 0.02,
+      "pass": 0.024869909502262446,
+      "pass_first_k": 0.025,
+      "verifier_selected": 0.025,
+      "lprm_best": 0.015,
+      "distinct": 9.457,
+      "verifier_hit_rate": 0.025
+    },
+    "20": {
+      "majority": 0.019,
+      "pass": 0.027,
+      "pass_first_k": 0.027,
+      "verifier_selected": 0.027,
+      "lprm_best": 0.016,
+      "distinct": 18.363,
+      "verifier_hit_rate": 0.027
+    }
+  },
+  "verifier_precision": 1.0,
+  "verifier_pass_rate": 0.0166,
+  "hits_histogram": {
+    "0": 973,
+    "1": 4,
+    "3": 1,
+    "5": 1,
+    "6": 1,
+    "7": 2,
+    "9": 1,
+    "13": 2,
+    "14": 1,
+    "15": 2,
+    "17": 4,
+    "18": 2,
+    "19": 3,
+    "20": 3
+  },
+  "checkpoint": "checkpoints/Sudoku-extreme-1k-aug-1000-test10k-ACT-torch/gram_sudoku_lmean_v2/step_65100",
+  "seed": 0,
+  "sigma_scale": 1.0,
+  "tag": "lmean_v2_final_ema",
+  "sigma": {
+    "note": "Task-1 AC asked for these from the training log. gram_sudoku_lmean_v2 ran with WANDB_MODE=disabled and predates the Task-0 sigma logging, so no sigma or per-step train-loss record exists. Measured from the checkpoint instead (experiments/sigma_probe.py); the log-derived values below are the only ones present.",
+    "prior_std_mean": 1.5230052396655083,
+    "posterior_std_mean": 1.5210936839381854,
+    "kl_per_sample_sum": 13.084063529968262,
+    "halt_only_reference_prior_std_mean": 0.9545
+  },
+  "train_loss_from_log": {
+    "note": "no [step N] train lines exist in logs/gram_sudoku_lmean_v2.log; final in-training [EVAL] line only",
+    "eval_lm_loss": 4.8045,
+    "eval_exact_accuracy": 0.0158,
+    "eval_token_accuracy": 0.5192,
+    "eval_kl_loss": 0.0,
+    "eval_lprm_loss": 0.5975,
+    "step": 65100
+  },
+  "comparison_vs_halt_only": {
+    "protocol": "identical harness, n=1000, seed=0 subsample, N=20, sigma_scale=1.0",
+    "halt_only": {
+      "1": {
+        "majority": 0.704,
+        "pass": 0.69375,
+        "pass_first_k": 0.704,
+        "verifier_selected": 0.704,
+        "lprm_best": 0.704,
+        "distinct": 1.0,
+        "verifier_hit_rate": 0.704
+      },
+      "5": {
+        "majority": 0.795,
+        "pass": 0.855047407120743,
+        "pass_first_k": 0.858,
+        "verifier_selected": 0.858,
+        "lprm_best": 0.837,
+        "distinct": 2.373,
+        "verifier_hit_rate": 0.858
+      },
+      "10": {
+        "majority": 0.856,
+        "pass": 0.8976789982463358,
+        "pass_first_k": 0.894,
+        "verifier_selected": 0.894,
+        "lprm_best": 0.866,
+        "distinct": 3.932,
+        "verifier_hit_rate": 0.894
+      },
+      "20": {
+        "majority": 0.892,
+        "pass": 0.926,
+        "pass_first_k": 0.926,
+        "verifier_selected": 0.926,
+        "lprm_best": 0.881,
+        "distinct": 6.988,
+        "verifier_hit_rate": 0.926
+      },
+      "single": 0.704
+    },
+    "lmean_v2": {
+      "1": {
+        "majority": 0.018,
+        "pass": 0.0166,
+        "pass_first_k": 0.018,
+        "verifier_selected": 0.018,
+        "lprm_best": 0.018,
+        "distinct": 1.0,
+        "verifier_hit_rate": 0.018
+      },
+      "5": {
+        "majority": 0.021,
+        "pass": 0.02307901186790506,
+        "pass_first_k": 0.023,
+        "verifier_selected": 0.023,
+        "lprm_best": 0.017,
+        "distinct": 4.831,
+        "verifier_hit_rate": 0.023
+      },
+      "10": {
+        "majority": 0.02,
+        "pass": 0.024869909502262446,
+        "pass_first_k": 0.025,
+        "verifier_selected": 0.025,
+        "lprm_best": 0.015,
+        "distinct": 9.457,
+        "verifier_hit_rate": 0.025
+      },
+      "20": {
+        "majority": 0.019,
+        "pass": 0.027,
+        "pass_first_k": 0.027,
+        "verifier_selected": 0.027,
+        "lprm_best": 0.016,
+        "distinct": 18.363,
+        "verifier_hit_rate": 0.027
+      },
+      "single": 0.018
+    }
+  }
+}

@@ -1,0 +1,55 @@
+diff --git a/README.md b/README.md
+index 9075804..2649d97 100644
+--- a/README.md
++++ b/README.md
+@@ -30,7 +30,7 @@ Installation should take a few minutes. For the smallest experiments on Sudoku-E
+ 
+ ```bash
+ pip install --upgrade pip wheel setuptools
+-pip install --pre --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu126 # install torch based on your cuda version
++pip install --pre --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu124 # install torch based on your cuda version
+ pip install -r requirements.txt # install requirements
+ pip install --no-cache-dir --no-build-isolation adam-atan2 
+ wandb login YOUR-LOGIN # login if you want the logger to sync results to your Weights & Biases (https://wandb.ai/)
+diff --git a/pretrain.py b/pretrain.py
+index b9072e2..af24d68 100644
+--- a/pretrain.py
++++ b/pretrain.py
+@@ -342,6 +342,17 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
+             reduced_metrics["train/lr"] = lr_this_step
+             return reduced_metrics
+ 
++def flatten_metrics(metrics: dict, prefix: str = "") -> dict:
++    """evaluate() returns {set_name: {metric: value}}; flatten to {set_name/metric: float}."""
++    flat = {}
++    for k, v in metrics.items():
++        if isinstance(v, dict):
++            flat.update(flatten_metrics(v, f"{prefix}{k}/"))
++        else:
++            flat[f"{prefix}{k}"] = float(v)
++    return flat
++
++
+ def evaluate(
+     config: PretrainConfig,
+     train_state: TrainState,
+@@ -609,6 +620,9 @@ def launch(hydra_config: DictConfig):
+             if RANK == 0 and metrics is not None:
+                 wandb.log(metrics, step=train_state.step)
+                 progress_bar.update(train_state.step - progress_bar.n)  # type: ignore
++                if train_state.step % 50 == 0:
++                    _log = {k: float(v) for k, v in metrics.items() if ('loss' in k or 'accuracy' in k)}
++                    print(f"[step {train_state.step}] " + " ".join(f"{k}={v:.4f}" for k, v in _log.items()) + f" lr={float(metrics.get('train/lr', 0.0)):.2e}", flush=True)
+             if config.ema:
+                 ema_helper.update(train_state.model)
+ 
+@@ -634,7 +648,8 @@ def launch(hydra_config: DictConfig):
+ 
+             if RANK == 0 and metrics is not None:
+                 wandb.log(metrics, step=train_state.step)
+-                
++                print(f"[EVAL @ step {train_state.step}] " + " ".join(f"{k}={v:.4f}" for k, v in sorted(flatten_metrics(metrics).items())), flush=True)
++
+             ############ Checkpointing
+             if RANK == 0:
+                 print("SAVE CHECKPOINT")
