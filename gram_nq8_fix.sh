@@ -12,8 +12,18 @@ export HF_HUB_DISABLE_PROGRESS_BARS=1
 gpu="$1"; beta="$2"; ema="$3"; run_name="$4"; port="$5"
 mkdir -p logs
 
+# gpu는 쉼표구분 목록 가능 ("3" 또는 "3,4,5"). nproc를 개수에서 자동 계산해
+# --nproc-per-node 와 어긋나지 않게 한다 (개수 불일치로 GPU 노는 사고 방지).
+NPROC="${NPROC:-$(echo $gpu | tr ',' '\n' | wc -l)}"
+
+# launch 직전 점유 확인
+for g in ${gpu//,/ }; do
+  used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i $g)
+  [ "$used" -gt 1000 ] && { echo "FATAL: GPU $g 사용 중 (${used}MiB)"; exit 1; }
+done
+
 CUDA_VISIBLE_DEVICES="${gpu}" torchrun \
-  --nproc-per-node 1 --rdzv_backend=c10d --rdzv_endpoint=localhost:"${port}" --nnodes=1 \
+  --nproc-per-node ${NPROC} --rdzv_backend=c10d --rdzv_endpoint=localhost:"${port}" --nnodes=1 \
   pretrain.py \
   arch=gram_nqueens8 \
   data_paths="[data/nqueens-8]" \

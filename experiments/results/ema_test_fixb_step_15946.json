@@ -1,0 +1,53 @@
+{
+  "n": 772,
+  "N": 20,
+  "task": "nqueens",
+  "single": 0.0,
+  "mean_sample": 0.0,
+  "by_k": {
+    "1": {
+      "majority": 0.0,
+      "pass": 0.0,
+      "pass_first_k": 0.0,
+      "verifier_selected": 0.0,
+      "lprm_best": 0.0,
+      "distinct": 1.0,
+      "verifier_hit_rate": 0.0
+    },
+    "5": {
+      "majority": 0.0,
+      "pass": 0.0,
+      "pass_first_k": 0.0,
+      "verifier_selected": 0.0,
+      "lprm_best": 0.0,
+      "distinct": 3.13860103626943,
+      "verifier_hit_rate": 0.0
+    },
+    "10": {
+      "majority": 0.0,
+      "pass": 0.0,
+      "pass_first_k": 0.0,
+      "verifier_selected": 0.0,
+      "lprm_best": 0.0,
+      "distinct": 5.303108808290156,
+      "verifier_hit_rate": 0.0
+    },
+    "20": {
+      "majority": 0.0,
+      "pass": 0.0,
+      "pass_first_k": 0.0,
+      "verifier_selected": 0.0,
+      "lprm_best": 0.0,
+      "distinct": 8.757772020725389,
+      "verifier_hit_rate": 0.0
+    }
+  },
+  "verifier_pass_rate": 0.0,
+  "hits_histogram": {
+    "0": 772
+  },
+  "checkpoint": "checkpoints/Nqueens-8-ACT-torch/gram_nq8_fix_b/step_15946",
+  "seed": 0,
+  "sigma_scale": 1.0,
+  "tag": "fix_b EMA-off step_15946"
+}

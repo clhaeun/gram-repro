@@ -79,6 +79,20 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     # noise head expansion 수정하기
     noise_head_expansion: float = 4.0
 
+    # --- posterior 의 y 인코딩 (사수 처방 4: one-hot) -----------------------
+    # 기본 False = 기존 동작(학습된 embed_tokens 조회). 기존 checkpoint 호환을 위해
+    # False 일 때는 어떤 모듈/버퍼도 새로 만들지 않는다(pretrain.py:266 이 strict load).
+    #
+    # 주의: nn.Embedding 조회는 수학적으로 one_hot @ W 와 **완전히 같다**.
+    # 따라서 "one-hot + 학습가능 projection" 은 현재 경로와 동일해져 아무 효과가 없다.
+    # 통로를 실제로 좁히려면 projection 이 없거나(zeropad) 고정(frozen_random)이어야 한다.
+    y_onehot: bool = False
+    #   "zeropad"       : one-hot [V] 을 hidden_size 앞쪽에 두고 나머지 0. 파라미터 0개.
+    #   "frozen_random" : 고정(비학습) 랜덤 행렬 [V, hidden_size] 로 사영. 파라미터 0개(buffer).
+    y_onehot_proj: str = "zeropad"
+    #   embed_scale(√hidden) 곱 위에 추가로 곱하는 계수. 1.0 이면 위치당 노름 = √hidden.
+    y_onehot_scale: float = 1.0
+
 
 
 class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
@@ -149,6 +163,24 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         self.embed_tokens = CastedEmbedding(self.config.vocab_size, self.config.hidden_size, init_std=embed_init_std, cast_to=self.forward_dtype)
         self.lm_head      = CastedLinear(self.config.hidden_size, self.config.vocab_size, bias=False)
         self.q_head       = CastedLinear(self.config.hidden_size, 2, bias=True)
+
+        # one-hot y 경로. y_onehot=False 면 **아무것도 만들지 않는다** -- 기존
+        # checkpoint 가 strict load(pretrain.py:266) 로 그대로 들어와야 하기 때문.
+        if self.config.y_onehot:
+            if self.config.y_onehot_proj == "frozen_random":
+                # 전역 RNG 를 건드리지 않으려고 로컬 generator 를 쓴다. 전역을 소비하면
+                # 다른 파라미터의 init 스트림이 밀려 기존 run 재현이 깨진다.
+                g = torch.Generator(device="cpu").manual_seed(0)
+                m = torch.randn(self.config.vocab_size, self.config.hidden_size, generator=g)
+                m = m / m.norm(dim=-1, keepdim=True)          # 행별 단위노름 -> 출력 노름 1
+                self.y_onehot_mat = nn.Buffer(m.to(self.forward_dtype), persistent=True)
+            elif self.config.y_onehot_proj != "zeropad":
+                raise ValueError(
+                    f"y_onehot_proj must be 'zeropad' or 'frozen_random', got {self.config.y_onehot_proj!r}")
+            if self.config.y_onehot_proj == "zeropad" and self.config.vocab_size > self.config.hidden_size:
+                raise ValueError(
+                    f"y_onehot_proj='zeropad' needs vocab_size({self.config.vocab_size}) "
+                    f"<= hidden_size({self.config.hidden_size})")
 
         self.puzzle_emb_len = -(self.config.puzzle_emb_ndim // -self.config.hidden_size)  if self.config.puzzle_emb_len == 0 else self.config.puzzle_emb_len  # ceil div
         if self.config.puzzle_emb_ndim > 0:
@@ -222,14 +254,33 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         return self.embed_scale * embedding
 
 
+    def _y_onehot_embeddings(self, labels):
+        """one-hot 기반 y 인코딩. 학습 파라미터 0개.
+
+        nn.Embedding 조회 == one_hot @ W 이므로, projection 이 학습 가능하면
+        기존 경로와 수학적으로 동일해진다. 여기서는 projection 이 없거나(zeropad)
+        고정 buffer(frozen_random) 라서 y -> latent 통로가 실제로 좁아진다.
+        두 경로 모두 위치당 L2 노름 1 로 나오게 맞췄다(아래 embed_scale 곱 전 기준).
+        """
+        oh = F.one_hot(labels.to(torch.int64), num_classes=self.config.vocab_size)
+        oh = oh.to(self.forward_dtype)
+        if self.config.y_onehot_proj == "zeropad":
+            return F.pad(oh, (0, self.config.hidden_size - self.config.vocab_size))
+        return oh @ self.y_onehot_mat.to(oh.dtype)
+
     def _y_embeddings(self, labels):
         labels = torch.where(labels==IGNORE_LABEL_ID, 0, labels)
-        embedding = self.embed_tokens(labels.to(torch.int32))
+        if self.config.y_onehot:
+            embedding = self._y_onehot_embeddings(labels)
+        else:
+            embedding = self.embed_tokens(labels.to(torch.int32))
 
         if self.puzzle_emb_len > 0:
             embedding = F.pad(embedding, (0, 0, self.puzzle_emb_len, 0))
 
-        return self.embed_scale * embedding 
+        if self.config.y_onehot:
+            return self.embed_scale * self.config.y_onehot_scale * embedding
+        return self.embed_scale * embedding
 
 
     def kl_loss(self, mu_q, logvar_q, mu_p, logvar_p):

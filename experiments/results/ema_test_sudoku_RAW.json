@@ -1,0 +1,74 @@
+{
+  "n": 1000,
+  "N": 20,
+  "task": "sudoku",
+  "single": 0.69,
+  "mean_sample": 0.6923,
+  "by_k": {
+    "1": {
+      "majority": 0.69,
+      "pass": 0.6922999999999999,
+      "pass_first_k": 0.69,
+      "verifier_selected": 0.69,
+      "lprm_best": 0.69,
+      "distinct": 1.0,
+      "verifier_hit_rate": 0.69
+    },
+    "5": {
+      "majority": 0.779,
+      "pass": 0.8568733875128999,
+      "pass_first_k": 0.86,
+      "verifier_selected": 0.86,
+      "lprm_best": 0.835,
+      "distinct": 2.394,
+      "verifier_hit_rate": 0.86
+    },
+    "10": {
+      "majority": 0.849,
+      "pass": 0.9017937279438828,
+      "pass_first_k": 0.9,
+      "verifier_selected": 0.9,
+      "lprm_best": 0.863,
+      "distinct": 3.971,
+      "verifier_hit_rate": 0.9
+    },
+    "20": {
+      "majority": 0.893,
+      "pass": 0.933,
+      "pass_first_k": 0.933,
+      "verifier_selected": 0.933,
+      "lprm_best": 0.881,
+      "distinct": 7.014,
+      "verifier_hit_rate": 0.933
+    }
+  },
+  "verifier_precision": 1.0,
+  "verifier_pass_rate": 0.6923,
+  "hits_histogram": {
+    "0": 67,
+    "1": 38,
+    "2": 29,
+    "3": 36,
+    "4": 25,
+    "5": 20,
+    "6": 19,
+    "7": 18,
+    "8": 21,
+    "9": 21,
+    "10": 28,
+    "11": 16,
+    "12": 12,
+    "13": 23,
+    "14": 19,
+    "15": 24,
+    "16": 32,
+    "17": 30,
+    "18": 39,
+    "19": 64,
+    "20": 419
+  },
+  "checkpoint": "checkpoints/Sudoku-extreme-1k-aug-1000-test10k-ACT-torch/gram_sudoku_halt_only/step_65100.raw",
+  "seed": 0,
+  "sigma_scale": 1.0,
+  "tag": "sudoku raw EMA"
+}
