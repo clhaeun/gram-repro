@@ -34,5 +34,11 @@ kl_balance: 0.8     # KL balancing 비율
 kl_reduction: sum   # L축 reduction. halt_only(71.85%)=sum, lmean_v2(1.8%)=mean
 lprm_coef: 1.0
 
+# 사수 처방 4: posterior 의 y 를 one-hot 으로 (y 복사 통로 차단).
+# 기본값은 gram.py 의 dataclass 기본과 동일 = 기존 동작. sh 에서 덮어쓴다.
+y_onehot: False
+y_onehot_proj: zeropad
+y_onehot_scale: 1.0
+
 
 noise_head_expansion: 1.5
