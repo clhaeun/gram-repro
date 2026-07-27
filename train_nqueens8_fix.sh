@@ -42,6 +42,12 @@ NHEXP="${NHEXP:-1.5}"
 YONEHOT="${YONEHOT:-False}"
 YOPROJ="${YOPROJ:-zeropad}"          # zeropad | frozen_random
 YOSCALE="${YOSCALE:-0.573}"
+# 큰 β 는 수렴이 느려 epochs 를 늘려야 정점을 감싼다. 기본값은 기존과 동일한 3000 이라
+# EPOCHS 를 안 주면 이전 run 들과 bit-identical 하다.
+EPOCHS="${EPOCHS:-3000}"
+# seed 편차 측정용. pretrain 의 seed 필드(cfg_pretrain.yaml:37 seed: 0)를 덮어쓴다.
+# 기본 0 = 기존과 동일.
+SEED="${SEED:-0}"
 RUN="${RUN:-gram_nq8_fix_b}"
 
 # launch 직전 점유 확인: 다른 작업이 쓰는 GPU면 즉시 중단.
@@ -66,7 +72,8 @@ CUDA_VISIBLE_DEVICES=${GPUS} ${LAUNCH} \
   arch=gram_nqueens8 \
   data_paths="[data/nqueens-8]" \
   'evaluators=[{name: nqueens@NQueens}]' \
-  epochs=3000 eval_interval=200 \
+  epochs=${EPOCHS} eval_interval=200 \
+  seed=${SEED} \
   lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 puzzle_emb_weight_decay=1.0 \
   arch.mlp_t=False arch.pos_encodings=rope \
   arch.L_layers=2 \
