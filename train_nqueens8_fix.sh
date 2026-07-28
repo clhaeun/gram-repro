@@ -48,6 +48,10 @@ EPOCHS="${EPOCHS:-3000}"
 # seed 편차 측정용. pretrain 의 seed 필드(cfg_pretrain.yaml:37 seed: 0)를 덮어쓴다.
 # 기본 0 = 기존과 동일.
 SEED="${SEED:-0}"
+# EMA run 에서 raw(비EMA) 가중치도 매 eval 마다 같이 평가해 `_raw` 접미사로 로깅.
+# eval 비용만 2배가 되고 학습 경로는 그대로다. 기본 False = 기존 동작 불변.
+# (EMA=False 면 애초에 raw 를 평가하므로 이 값은 무시된다.)
+DUALEVAL="${DUALEVAL:-False}"
 RUN="${RUN:-gram_nq8_fix_b}"
 
 # launch 직전 점유 확인: 다른 작업이 쓰는 GPU면 즉시 중단.
@@ -81,6 +85,6 @@ CUDA_VISIBLE_DEVICES=${GPUS} ${LAUNCH} \
   global_batch_size=768 \
   arch.kl_coef=${BETA} arch.kl_reduction=${KL_RED} arch.noise_head_expansion=${NHEXP} \
   arch.y_onehot=${YONEHOT} arch.y_onehot_proj=${YOPROJ} arch.y_onehot_scale=${YOSCALE} \
-  ema=${EMA} ema_rate=${EMA_RATE} lr_warmup_steps=${WARMUP} \
+  ema=${EMA} ema_rate=${EMA_RATE} dual_eval=${DUALEVAL} lr_warmup_steps=${WARMUP} \
   +run_name=${RUN} \
   2>&1 | tee logs/${RUN}.log

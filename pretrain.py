@@ -83,6 +83,7 @@ class PretrainConfig(pydantic.BaseModel):
 
     ema: bool = False # use Exponential-Moving-Average
     ema_rate: float = 0.999 # EMA-rate
+    dual_eval: bool = False # with ema, also eval the raw (non-EMA) weights and log them under `_raw`
     freeze_weights: bool = False # If True, freeze weights and only learn the embeddings
 
 @dataclass
@@ -627,6 +628,8 @@ def launch(hydra_config: DictConfig):
         print('Setup EMA')
         ema_helper = EMAHelper(mu=config.ema_rate)
         ema_helper.register(train_state.model)
+    if config.dual_eval and not config.ema:
+        print("dual_eval=True but ema=False -- the single eval already runs on the raw weights, nothing to add")
 
     # Training Loop
     for _iter_id in range(total_iters):
@@ -680,6 +683,52 @@ def launch(hydra_config: DictConfig):
                         mirror[f"eval/{k[:-len('accuracy')]}token_accuracy"] = v
                 wandb.log({**metrics, **mirror}, step=train_state.step)
                 print(f"[EVAL @ step {train_state.step}] " + " ".join(f"{k}={v:.4f}" for k, v in sorted(flatten_metrics(metrics).items())), flush=True)
+
+            ############ Raw (non-EMA) evaluation at the same step
+            # With ema=True the block above only ever sees the EMA copy, so the
+            # in-loop curve says nothing about the live SGD weights (the post-hoc
+            # .live scan that answers this costs 1-2h per run).  dual_eval runs
+            # the identical eval once more on the raw model and logs it under a
+            # `_raw` suffix, so both curves finish with the run.
+            #
+            # The raw pass is side-effect free: it gets a config copy with no
+            # checkpoint_path / eval_save_outputs, so it cannot overwrite the
+            # prediction dumps or evaluator artifacts the EMA pass just wrote.
+            # It touches no training state -- evaluate() runs under
+            # inference_mode and builds its own carry; ema_helper is not read or
+            # updated here; .eval() is undone by the model.train() at the top of
+            # the next iteration.
+            if config.ema and config.dual_eval:
+                if RANK == 0:
+                    print("EVALUATE RAW (non-EMA)")
+                raw_config = config.model_copy(update={"checkpoint_path": None, "eval_save_outputs": []})
+                # The extra forward passes would otherwise advance the torch RNG
+                # (GRAM samples noise every forward), so training after this eval
+                # would diverge from the same seed with dual_eval=False.  Snapshot
+                # and restore so the toggle cannot move the training trajectory.
+                rng_cpu = torch.get_rng_state()
+                rng_cuda = torch.cuda.get_rng_state_all()
+                train_state.model.eval()
+                metrics_raw = evaluate(raw_config,
+                    train_state,
+                    eval_loader,
+                    eval_metadata,
+                    evaluators,
+                    rank=RANK,
+                    world_size=WORLD_SIZE,
+                    cpu_group=CPU_PROCESS_GROUP)
+                torch.set_rng_state(rng_cpu)
+                torch.cuda.set_rng_state_all(rng_cuda)
+
+                if RANK == 0 and metrics_raw is not None:
+                    flat_raw = flatten_metrics(metrics_raw)
+                    payload = {f"{k}_raw": v for k, v in flat_raw.items()}
+                    for k, v in flat_raw.items():
+                        if k.endswith("/accuracy"):
+                            payload[f"{k[:-len('accuracy')]}token_accuracy_raw"] = v
+                    mirror_raw = {f"eval/{k}": v for k, v in payload.items()}
+                    wandb.log({**payload, **mirror_raw}, step=train_state.step)
+                    print(f"[EVAL RAW @ step {train_state.step}] " + " ".join(f"{k}_raw={v:.4f}" for k, v in sorted(flat_raw.items())), flush=True)
 
             ############ Checkpointing
             if RANK == 0:

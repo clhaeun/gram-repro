@@ -39,4 +39,5 @@ min_eval_interval: 0 # when to start the eval
 
 ema: False # use Exponential-Moving-Average
 ema_rate: 0.999 # EMA-rate
+dual_eval: False # with ema, also eval the raw (non-EMA) weights each eval; logged under `_raw`
 freeze_weights: False # If True, freeze weights and only learn the embeddings
