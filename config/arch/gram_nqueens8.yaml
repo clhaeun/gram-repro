@@ -31,7 +31,8 @@ no_ACT_continue: True
 # GRAM용
 kl_coef: 0.07       # KL 가중치 (beta) -- swept over {0.045, 0.07, 0.1}
 kl_balance: 0.8     # KL balancing 비율
-kl_reduction: sum   # L축 reduction. halt_only(71.85%)=sum, lmean_v2(1.8%)=mean
+kl_reduction: mean  # L축 reduction. 이 실험군의 실효 눈금이다(β 값이 전부 mean 기준).
+                    # sum 은 halt_only Sudoku 전용. env 누락 시 sum 으로 떨어지면 즉사한다.
 lprm_coef: 1.0
 
 # 사수 처방 4: posterior 의 y 를 one-hot 으로 (y 복사 통로 차단).
