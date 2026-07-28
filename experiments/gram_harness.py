@@ -129,6 +129,32 @@ def sigma_scale(net, scale):
 
 
 @contextmanager
+def mu_scale(net, scale):
+    """Scale the guide (mu) before sampling.  scale=0 -> "stochasticity only"
+    (eps = sigma * noise, guide removed).  scale=1 (default) is a no-op wrapper
+    that returns exactly what reparameterize returned before, so the normal path
+    stays bit-identical.
+
+    Paired with sigma_scale(net, 0) this gives the three ablation modes of the
+    paper's Table 3b without touching models/recursive_reasoning/gram.py.
+    """
+    if float(scale) == 1.0:                 # no-op: do not even wrap
+        yield
+        return
+    inner = net.model.inner
+    orig = inner.reparameterize
+
+    def patched(mu, logvar):
+        return orig(mu * float(scale), logvar)
+
+    inner.reparameterize = patched
+    try:
+        yield
+    finally:
+        inner.reparameterize = orig
+
+
+@contextmanager
 def capture_kl(net, sink):
     """Append per-sample KL (summed over L and D) for every kl_loss call."""
     inner = net.model.inner
@@ -177,7 +203,7 @@ def capture_sigma(net, sink):
 # --------------------------------------------------------------------------- #
 @torch.inference_mode()
 def rollout(net, inputs, labels, K, sigma_scale_=1.0, mode="prior",
-            batch_size=512, seed=0, verbose=True):
+            batch_size=512, seed=0, verbose=True, mu_scale_=1.0):
     """K independent forward passes over the same puzzles.
 
     mode="prior"     : eps ~ p(.|u)     (no labels used)
@@ -198,7 +224,7 @@ def rollout(net, inputs, labels, K, sigma_scale_=1.0, mode="prior",
     preds = np.zeros((K, n, seq_len), dtype=np.int64)
     v = np.zeros((K, n), dtype=np.float32)
 
-    with sigma_scale(net, sigma_scale_):
+    with sigma_scale(net, sigma_scale_), mu_scale(net, mu_scale_):
         for k in range(K):
             torch.random.manual_seed(seed * 100003 + k)
             for lo in range(0, n, batch_size):

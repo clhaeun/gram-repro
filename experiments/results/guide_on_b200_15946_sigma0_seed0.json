@@ -1,0 +1,43 @@
+{
+  "checkpoint": "checkpoints/Nqueens-8-ACT-torch/nq8_on_b200_ema/step_15946.live",
+  "n": 772,
+  "N": 20,
+  "seed": 0,
+  "sigma_scale": 0.0,
+  "mu_scale": 1.0,
+  "tag": null,
+  "prior_all_samples": {
+    "valid": 0.23575129533678757,
+    "consistent": 0.9974093264248705,
+    "strict": 0.23575129533678757,
+    "queen_count_mean": 15.011658031088082,
+    "queen_count_min": 7,
+    "queen_count_max": 33
+  },
+  "prior_single_k0": {
+    "valid": 0.23575129533678757,
+    "consistent": 0.9974093264248705,
+    "strict": 0.23575129533678757,
+    "queen_count_mean": 15.011658031088082,
+    "queen_count_min": 7,
+    "queen_count_max": 33
+  },
+  "posterior": {
+    "valid": 1.0,
+    "consistent": 1.0,
+    "strict": 1.0,
+    "queen_count_mean": 8.0,
+    "queen_count_min": 8,
+    "queen_count_max": 8
+  },
+  "pass_at": {
+    "1": 0.23575129533678757,
+    "5": 0.23575129533678757,
+    "10": 0.23575129533678757,
+    "20": 0.23575129533678757
+  },
+  "majority_at_N_valid": 0.23575129533678757,
+  "verifier_selected_at_N_valid": 0.23575129533678757,
+  "distinct_at_N_mean": 1.0,
+  "puzzles_with_ge1_valid": 0.23575129533678757
+}

@@ -10,6 +10,7 @@ experiments/eval_harness.py 를 쓰지 않는 이유: 그쪽 NQueensTask.verify 
         --out experiments/results/sweep_<run>_<step>.json
 """
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -36,6 +37,92 @@ def majority_row(rows):
     return np.array(Counter(tuple(r) for r in rows).most_common(1)[0][0], dtype=np.int64)
 
 
+def solution_counts(inputs, sidecar_path):
+    """문제별 ground-truth 해의 총 개수 total(x).
+
+    라벨 개수가 아니다 -- 라벨은 x 하나당 1개만 저장돼 있다. sidecar 는 해를 전수
+    열거해 두었으므로 그쪽의 per-x 해 개수를 쓴다.
+    키: 'sha1(flat token board uint8 bytes).hexdigest()[:16]' (sidecar meta 참조).
+    조회 실패한 문제는 -1.
+    """
+    tbl = json.load(open(sidecar_path))["inputs"]
+    out = np.full(len(inputs), -1, dtype=np.int64)
+    for i, row in enumerate(inputs):
+        e = tbl.get(hashlib.sha1(row.astype(np.uint8).tobytes()).hexdigest()[:16])
+        if e is not None:
+            out[i] = len(e["solutions"])
+    return out
+
+
+# 논문 Fig 15 대응 버킷
+SOL_BUCKETS = [("1", 1, 1), ("2-5", 2, 5), ("6-20", 6, 20), ("21+", 21, 10 ** 9)]
+
+
+def coverage_at_N(cand, inputs, n, totals):
+    """논문 Table 1 의 coverage = "unique valid solutions discovered with 20 samples".
+
+    문제 x 마다
+      found(x) = N 샘플 중 **valid AND consistent** 인 보드의 unique 개수
+                 (consistent 필수: 힌트를 어긴 valid 보드는 x 의 해집합에 없다.
+                  우리 데이터는 해 전수 열거 기반이라 valid & consistent <=> x 의 정답해)
+      total(x) = sidecar 의 per-x 해 개수 (라벨 개수 아님)
+      coverage(x) = found(x) / total(x)
+    반환: 전체 평균 + 해 개수 버킷별 분해 + 진단용 카운트.
+    """
+    N, B, L = cand.shape
+    r = verify_boards(cand.reshape(N * B, L), np.tile(inputs, (N, 1)), n)
+    ok = (r["valid"] & r["consistent"]).reshape(N, B)          # [N, B]
+
+    found = np.zeros(B, dtype=np.int64)
+    for b in range(B):
+        found[b] = len({tuple(cand[k, b]) for k in range(N) if ok[k, b]})
+
+    have = totals > 0
+    cov = np.zeros(B, dtype=np.float64)
+    cov[have] = found[have] / totals[have]
+
+    res = dict(
+        coverage=float(cov[have].mean()) if have.any() else None,
+        n_puzzles_scored=int(have.sum()),
+        n_puzzles_no_total=int((~have).sum()),
+        found_mean=float(found[have].mean()) if have.any() else None,
+        total_mean=float(totals[have].mean()) if have.any() else None,
+        # found > total 이면 정의가 깨진 것(해집합 밖 보드가 통과). 0 이어야 정상.
+        n_found_gt_total=int((found[have] > totals[have]).sum()),
+    )
+    buckets = []
+    for name, lo, hi in SOL_BUCKETS:
+        m = have & (totals >= lo) & (totals <= hi)
+        buckets.append(dict(bucket=name, n_puzzles=int(m.sum()),
+                            coverage=(float(cov[m].mean()) if m.any() else None),
+                            found_mean=(float(found[m].mean()) if m.any() else None),
+                            total_mean=(float(totals[m].mean()) if m.any() else None)))
+    res["by_solution_bucket"] = buckets
+    return res
+
+
+# 결과 json 소비자가 지표를 헷갈리지 않도록 정의를 파일 자체에 박아둔다.
+# 축: [가중치는 --ckpt-dir/--step 로, 경로는 이 스크립트=harness, 표본=N, 기준=valid/strict]
+METRIC_DEFS = {
+    "집계방식/단일시도": "퍼즐당 N 샘플을 각각 채점한 평균. '한 번 뽑아 맞을 확률'. pass@1 과 수학적으로 동일.",
+    "prior_all_samples.valid": "단일시도, valid 기준(퀸 n개 + 행/열/양대각 중복 없음). 입력 힌트 보존은 보지 않음.",
+    "prior_all_samples.consistent": "단일시도, 입력에 주어진 퀸을 모두 보존했는가.",
+    "prior_all_samples.strict": "단일시도, valid AND consistent.",
+    "prior_single_k0": "단일시도지만 k=0 샘플 1개만 사용(표본 1/N). 참고용.",
+    "posterior": "정답 y 를 본 posterior 경로. prior 성능과 다른 축이라 같이 읽지 말 것.",
+    "집계방식/pass@k": "퍼즐당 N 샘플 중 k 개를 뽑았을 때 1개 이상 valid 일 확률(불편추정량). k=N 이면 puzzles_with_ge1_valid 와 항상 동일.",
+    "집계방식/selection": "N 샘플에서 1개를 고른 뒤 채점. 고르는 규칙이 majority / verifier.",
+    "majority_at_N_valid": "selection. N 샘플의 최빈 보드 1개(동률은 첫 등장)를 valid 채점.",
+    "verifier_selected_at_N_valid": "selection. 모델 자신의 lrpm_head 점수가 최고인 샘플 1개를 valid 채점. 정답 미사용.",
+    "distinct_at_N_mean": "다양성 지표(정확도 아님). N 샘플 중 서로 다른 보드 수, 1~N.",
+    "집계방식/coverage": "정답해 집합을 몇 % 발견했는가. 위 셋과 완전히 다른 축.",
+    "coverage_at_20": "논문 Table 1 coverage. 퍼즐마다 found/total 을 구해 전체 평균. "
+                      "found = N 샘플 중 valid AND consistent 인 보드의 unique 개수, "
+                      "total = sidecar 의 per-x 전체 해 개수(라벨 개수 아님). N 은 --N (기본 20).",
+    "coverage_at_20.by_solution_bucket": "논문 Fig 15 대응. total(x) 을 {1, 2-5, 6-20, 21+} 로 나눈 분해.",
+}
+
+
 def flat_stats(preds, inputs, n):
     """preds [K, B, L] -> valid/consistent/strict/queen_count 를 전 샘플 평균."""
     K, B, L = preds.shape
@@ -55,6 +142,10 @@ def main():
     ap.add_argument("--N", type=int, default=20)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--sigma-scale", type=float, default=1.0)
+    # Table 3b ablation: --mu-scale 0 = "stochasticity only", --sigma-scale 0 = "guide only".
+    ap.add_argument("--mu-scale", type=float, default=1.0)
+    ap.add_argument("--sidecar", default="data/nqueens-8/sidecar_8.json",
+                    help="coverage 의 total(x) 출처. per-x 전체 해 개수를 담고 있다.")
     ap.add_argument("--tag", default=None)
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
@@ -65,13 +156,14 @@ def main():
     B = len(inputs)
 
     pri = rollout(net, inputs, labels, K=args.N, sigma_scale_=args.sigma_scale,
-                  mode="prior", seed=args.seed, verbose=False)
+                  mode="prior", seed=args.seed, verbose=False, mu_scale_=args.mu_scale)
     post = rollout(net, inputs, labels, K=1, sigma_scale_=args.sigma_scale,
-                   mode="posterior", seed=args.seed, verbose=False)
+                   mode="posterior", seed=args.seed, verbose=False, mu_scale_=args.mu_scale)
 
     cand, v = pri["preds"], pri["v"]                       # [N, B, L], [N, B]
     res = {"checkpoint": os.path.join(args.ckpt_dir, args.step), "n": B, "N": args.N,
-           "seed": args.seed, "sigma_scale": args.sigma_scale, "tag": args.tag}
+           "seed": args.seed, "sigma_scale": args.sigma_scale, "mu_scale": args.mu_scale,
+           "tag": args.tag}
 
     res["prior_all_samples"] = flat_stats(cand, inputs, args.n)
     res["prior_single_k0"] = flat_stats(cand[:1], inputs, args.n)
@@ -95,6 +187,11 @@ def main():
     res["majority_at_N_valid"] = float(verify_boards(maj, inputs, args.n)["valid"].mean())
     res["verifier_selected_at_N_valid"] = float(verify_boards(sel, inputs, args.n)["valid"].mean())
     res["distinct_at_N_mean"] = float(np.mean(dis))
+
+    # coverage: 위 지표들과 다른 축(정답해 집합의 발견 비율). 기존 키는 건드리지 않는다.
+    totals = solution_counts(inputs, args.sidecar)
+    res["coverage_at_20"] = coverage_at_N(cand, inputs, args.n, totals)
+    res["metric_defs"] = METRIC_DEFS
     res["puzzles_with_ge1_valid"] = float((nc > 0).mean())
 
     p = res["prior_all_samples"]
@@ -108,6 +205,13 @@ def main():
     print(f"  pass@k {res['pass_at']}  majority@{args.N}={res['majority_at_N_valid']:.4f} "
           f"verifier_sel@{args.N}={res['verifier_selected_at_N_valid']:.4f} "
           f"distinct@{args.N}={res['distinct_at_N_mean']:.2f}")
+    c = res["coverage_at_20"]
+    print(f"  coverage@{args.N}={c['coverage']:.4f} (found {c['found_mean']:.2f} / total {c['total_mean']:.2f}, "
+          f"scored {c['n_puzzles_scored']}, total없음 {c['n_puzzles_no_total']}, found>total {c['n_found_gt_total']})")
+    for b in c["by_solution_bucket"]:
+        if b["n_puzzles"]:
+            print(f"    해{b['bucket']:>5}: n={b['n_puzzles']:4d}  coverage={b['coverage']:.4f}  "
+                  f"found {b['found_mean']:.2f}/{b['total_mean']:.2f}")
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w") as f:

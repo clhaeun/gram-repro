@@ -1,0 +1,78 @@
+{
+  "checkpoint": "checkpoints/Nqueens-8-ACT-torch/nq8_off_b220_ema6k_s0/step_26197.live",
+  "n_eval": 772,
+  "N": 20,
+  "seed": 0,
+  "mu_sigma": {
+    "H_cycles": 3,
+    "total_calls": 48,
+    "per_transition": [
+      {
+        "transition": 0,
+        "n_calls": 16,
+        "mu_norm": 0.6458842512220144,
+        "sigma_norm": 19.32764446735382,
+        "ratio_mu_over_sigma": 0.033417639294481674,
+        "sigma_elem": 0.853255245834589,
+        "mu_elem_abs": 0.021642672771122307
+      },
+      {
+        "transition": 1,
+        "n_calls": 16,
+        "mu_norm": 0.6559836566448212,
+        "sigma_norm": 19.47506821155548,
+        "ratio_mu_over_sigma": 0.0336832533534129,
+        "sigma_elem": 0.859564732760191,
+        "mu_elem_abs": 0.021952040260657668
+      },
+      {
+        "transition": 2,
+        "n_calls": 16,
+        "mu_norm": 0.6621259674429893,
+        "sigma_norm": 19.48006772994995,
+        "ratio_mu_over_sigma": 0.03398992121700855,
+        "sigma_elem": 0.8596151135861874,
+        "mu_elem_abs": 0.022166457260027528
+      }
+    ]
+  },
+  "overall_valid": 0.7848445595854923,
+  "overall_pass_at_N": 1.0,
+  "sidecar_meta": {
+    "n": 8,
+    "encoding": "columns",
+    "removals": [
+      5,
+      6,
+      7
+    ],
+    "num_solutions_total": 92,
+    "num_unique_inputs": 5148,
+    "hash": "sha1(flat token board uint8 bytes).hexdigest()[:16]"
+  },
+  "sidecar_hit_rate": 1.0,
+  "buckets": [
+    {
+      "bucket": "1",
+      "n_puzzles": 494,
+      "valid_rate": 0.7727732793522267,
+      "pass_at_N": 1.0
+    },
+    {
+      "bucket": "2-5",
+      "n_puzzles": 267,
+      "valid_rate": 0.8074906367041198,
+      "pass_at_N": 1.0
+    },
+    {
+      "bucket": "6-20",
+      "n_puzzles": 11,
+      "valid_rate": 0.7772727272727272,
+      "pass_at_N": 1.0
+    },
+    {
+      "bucket": "21+",
+      "n_puzzles": 0
+    }
+  ]
+}
