@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 from collections import Counter
 from math import comb
@@ -123,6 +124,63 @@ METRIC_DEFS = {
 }
 
 
+def log_to_wandb(res, seed):
+    """측정 결과 1점을 wandb 곡선에 얹는다. --wandb 를 줬을 때만 호출된다.
+
+    학습 run 하나당 harness run 하나(`<run>__live_scan` 등)를 **결정적 id** 로 잡고
+    resume="allow" 로 이어붙인다. 그래서 스캔을 step 마다 따로 실행해도 한 곡선에 모이고,
+    사후 일괄 업로드(wandb_harness_upload.py --mode curves)와도 같은 run 을 가리킨다.
+
+    x 축은 커스텀 metric `harness/step` 이다. 끝난 학습 run 에 resume 해서 과거 step 으로
+    log 하면 wandb 가 _step 단조성 때문에 조용히 버리기 때문에 그 경로는 쓸 수 없다.
+
+    주의: 같은 (학습 run, 가중치, seed) 를 **두 프로세스가 동시에** 올리면 같은 wandb run 에
+    붙어 경합한다. 스캔은 run 당 GPU 1장 순차 실행이라 문제되지 않지만, 병렬로 돌릴 거면
+    --wandb 를 끄고 끝난 뒤 wandb_harness_upload.py 로 일괄 업로드해라.
+    """
+    import wandb
+    from experiments.wandb_harness_upload import harness_run_id, harness_run_name, run_meta
+
+    m = re.match(r"checkpoints/([^/]+)/([^/]+)/step_(\d+)(\.live)?$", res["checkpoint"])
+    if not m:
+        print(f"  [wandb] checkpoint 경로가 예상 형식이 아니라 건너뜀: {res['checkpoint']}")
+        return
+    project, train_run, step, live = m.group(1), m.group(2), int(m.group(3)), bool(m.group(4))
+    weights = "live" if live else "ckpt"
+
+    wrun = wandb.init(project=project, group=train_run, job_type="harness",
+                      name=harness_run_name(train_run, weights, seed),
+                      id=harness_run_id(project, train_run, weights, seed),
+                      resume="allow", reinit=True,
+                      config=dict(source_run=train_run, weights=weights, harness_seed=seed,
+                                  **run_meta(project, train_run)))
+    wrun.define_metric("harness/step")
+    wrun.define_metric("harness/*", step_metric="harness/step")
+
+    # coverage_at_20 은 나중에 추가된 지표라 예전 결과 json 에는 없다. 없으면 그 계열만 뺀다.
+    p, q, c = res["prior_all_samples"], res["posterior"], res.get("coverage_at_20") or {}
+    pre = f"harness/{weights}"
+    payload = {
+        "harness/step": step,
+        f"{pre}/prior_valid": p["valid"], f"{pre}/prior_strict": p["strict"],
+        f"{pre}/prior_consistent": p["consistent"], f"{pre}/queens_mean": p["queen_count_mean"],
+        f"{pre}/posterior_valid": q["valid"],
+        f"{pre}/majority_at_N": res["majority_at_N_valid"],
+        f"{pre}/verifier_sel_at_N": res["verifier_selected_at_N_valid"],
+        f"{pre}/distinct_at_N": res["distinct_at_N_mean"],
+        f"{pre}/puzzles_with_ge1_valid": res["puzzles_with_ge1_valid"],
+    }
+    payload.update({f"{pre}/pass_at_{k}": v for k, v in res["pass_at"].items()})
+    if c.get("coverage") is not None:
+        payload[f"{pre}/coverage_at_N"] = c["coverage"]
+        for b in c["by_solution_bucket"]:
+            if b["coverage"] is not None:
+                payload[f"{pre}/coverage_by_sol/{b['bucket']}"] = b["coverage"]
+    wrun.log(payload)
+    wrun.finish()
+    print(f"  [wandb] {project}/{harness_run_name(train_run, weights, seed)} <- step {step}")
+
+
 def flat_stats(preds, inputs, n):
     """preds [K, B, L] -> valid/consistent/strict/queen_count 를 전 샘플 평균."""
     K, B, L = preds.shape
@@ -146,6 +204,8 @@ def main():
     ap.add_argument("--mu-scale", type=float, default=1.0)
     ap.add_argument("--sidecar", default="data/nqueens-8/sidecar_8.json",
                     help="coverage 의 total(x) 출처. per-x 전체 해 개수를 담고 있다.")
+    ap.add_argument("--wandb", action="store_true",
+                    help="측정 직후 결과를 wandb 곡선에 얹는다. 기본 off = 기존 동작 그대로.")
     ap.add_argument("--tag", default=None)
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
@@ -217,6 +277,9 @@ def main():
     with open(args.out, "w") as f:
         json.dump(res, f, indent=2)
     print(f"  [out] {args.out}")
+
+    if args.wandb:
+        log_to_wandb(res, args.seed)
 
 
 if __name__ == "__main__":
