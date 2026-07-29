@@ -1,0 +1,55 @@
+# N-Queens 10x10.  gram_nqueens8.yaml 의 사본이며 값은 전부 동일하다 -- seq_len 은
+# arch config 가 아니라 dataset metadata 에서 온다(pretrain.py:124), 그래서
+# data_paths=[data/nqueens-10] 만 바꾸면 seq_len=100 이 자동으로 들어간다.
+# L = seq_len + puzzle_emb_len = 100 + 16 = 116.  (8x8 은 64 + 16 = 80)
+# kl_reduction 이 mean 이므로 β 눈금은 L 에 무관하다 -- 8x8 의 β 값을 그대로 쓴다.
+name: recursive_reasoning.gram@TinyRecursiveReasoningModel_ACTV1
+loss:
+  name: losses@ACTLossHead
+  loss_type: stablemax_cross_entropy
+
+halt_exploration_prob: 0.1
+halt_max_steps: 16
+
+# GRAM's (T, K): T = H_cycles outer transitions, K = L_cycles inner refinements
+H_cycles: 3
+L_cycles: 4
+
+H_layers: 0
+L_layers: 2
+
+hidden_size: 512
+num_heads: 8
+expansion: 4
+
+puzzle_emb_ndim: ${.hidden_size}
+
+# N-Queens uses the attention core: the sudoku-only mlp_t exception is off here,
+# and positions are encoded with rope rather than being dropped.
+mlp_t: False
+pos_encodings: rope
+forward_dtype: bfloat16
+
+puzzle_emb_len: 16
+no_ACT_continue: True
+
+# GRAM용
+kl_coef: 0.07       # KL 가중치 (beta) -- swept over {0.045, 0.07, 0.1}
+kl_balance: 0.8     # KL balancing 비율
+kl_reduction: mean  # L축 reduction. 이 실험군의 실효 눈금이다(β 값이 전부 mean 기준).
+                    # sum 은 halt_only Sudoku 전용. env 누락 시 sum 으로 떨어지면 즉사한다.
+lprm_coef: 1.0
+
+# 사수 처방 4: posterior 의 y 를 one-hot 으로 (y 복사 통로 차단).
+# 기본값은 gram.py 의 dataclass 기본과 동일 = 기존 동작. sh 에서 덮어쓴다.
+y_onehot: False
+y_onehot_proj: zeropad
+y_onehot_scale: 1.0
+
+# v2 손잡이 2개. 기본값은 gram.py 의 dataclass 기본과 동일 = 기존 동작 그대로.
+# hydra 가 struct 모드라 여기에 없으면 arch.* override 자체가 거부된다.
+logvar_bias_init: -4.0   # prior/post logvar bias 초기값. -4.0 -> 초기 sigma 0.135
+y_inject: add            # posterior 의 y 주입. add | concat ([z_H;y_emb] -> Linear(2D,D), [I;I] init)
+
+
+noise_head_expansion: 1.5

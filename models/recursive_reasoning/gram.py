@@ -79,6 +79,11 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     # noise head expansion 수정하기
     noise_head_expansion: float = 4.0
 
+    # prior/posterior logvar 헤드에 더하는 학습가능 스칼라 bias 의 초기값.
+    # -4.0 이면 초기 sigma = exp(-2) = 0.135 로 노이즈를 작게 시작한다(기존 하드코딩값).
+    # 0.0 이면 초기 sigma = 1.0 이라 KL 이 초반에 훨씬 크게 잡힌다.
+    logvar_bias_init: float = -4.0
+
     # --- posterior 의 y 인코딩 (사수 처방 4: one-hot) -----------------------
     # 기본 False = 기존 동작(학습된 embed_tokens 조회). 기존 checkpoint 호환을 위해
     # False 일 때는 어떤 모듈/버퍼도 새로 만들지 않는다(pretrain.py:266 이 strict load).
@@ -92,6 +97,15 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     y_onehot_proj: str = "zeropad"
     #   embed_scale(√hidden) 곱 위에 추가로 곱하는 계수. 1.0 이면 위치당 노름 = √hidden.
     y_onehot_scale: float = 1.0
+
+    # --- posterior 의 y 주입 방식 -------------------------------------------
+    #   "add"    : u_y = z_H + y_emb                       (기존. 파라미터 0개)
+    #   "concat" : u_y = W([z_H ; y_emb])   W: 2D -> D     (파라미터 2D*D)
+    # prior 경로는 어느 쪽이든 손대지 않는다: mu_p/logvar_p 는 계속 z_H(D차원)만 받고,
+    # KL 은 여전히 D 차원 대각 가우시안 두 개 사이의 것이라 구조가 바뀌지 않는다.
+    # W 는 [I ; I] 로 초기화되므로 step 0 에서 concat 은 add 와 수치적으로 동일하다 --
+    # 두 arm 의 차이는 학습이 W 를 항등에서 밀어낸 결과로만 남는다.
+    y_inject: str = "add"   # "add" | "concat"
 
 
 
@@ -223,9 +237,22 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         self.post_logvar = SwiGLU(hidden_size=D, expansion=nh_exp)
         self.lrpm_head = CastedLinear(D, 1, bias=True)
 
-        # 노이즈를 작게 시작하기
-        self.prior_logvar_bias = nn.Parameter(torch.tensor(-4.0))
-        self.post_logvar_bias = nn.Parameter(torch.tensor(-4.0))
+        # concat 일 때만 사영을 만든다. "add" 면 모듈을 아예 만들지 않으므로 기존
+        # checkpoint 의 strict load(pretrain.py:266)가 그대로 통과한다.
+        if self.config.y_inject == "concat":
+            self.y_concat_proj = CastedLinear(2 * D, D, bias=False)
+            # [I ; I] 초기화: step 0 에서 W([z_H ; y_emb]) == z_H + y_emb 라
+            # "add" arm 과 정확히 같은 지점에서 출발한다.
+            with torch.no_grad():
+                self.y_concat_proj.weight.copy_(
+                    torch.cat([torch.eye(D), torch.eye(D)], dim=-1))
+        elif self.config.y_inject != "add":
+            raise ValueError(
+                f"y_inject must be 'add' or 'concat', got {self.config.y_inject!r}")
+
+        # 노이즈를 작게 시작하기 (기본 -4.0 = 기존 하드코딩값, arch.logvar_bias_init 로 덮어씀)
+        self.prior_logvar_bias = nn.Parameter(torch.tensor(self.config.logvar_bias_init))
+        self.post_logvar_bias = nn.Parameter(torch.tensor(self.config.logvar_bias_init))
 
         # Test-time에 sampled latent std 조정 실험용
         self.sigma_scale = 1.0
@@ -301,6 +328,36 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         return mu + eps * std
 
 
+    def _inject_y(self, z_H, y_emb):
+        """posterior 입력 u_y 를 만든다.  prior 는 이 함수를 쓰지 않는다.
+
+        grad 구간에서도 호출되므로 no_grad 를 걸면 안 된다 -- 걸면 y_concat_proj 가
+        학습되지 않고 posterior 로 가는 gradient 도 끊긴다.
+        """
+        if self.config.y_inject == "concat":
+            return self.y_concat_proj(torch.cat([z_H, y_emb], dim=-1))
+        return z_H + y_emb
+
+    @torch.no_grad()
+    def _y_proj_deviation(self):
+        """‖W - [I;I]‖_F / ‖[I;I]‖_F.  0 이면 아직 add 와 같은 함수다.
+
+        주의 -- 이 스칼라만으로 "concat 이 add 와 다른 함수를 배웠다"고 판정하면 안 된다.
+        AdamW 가 model.parameters() 전체에 weight_decay 를 걸기 때문에(pretrain.py:185,
+        예외 group 없음) W 는 gradient 와 무관하게 매 step (1 - lr*wd) 배로 줄어든다.
+        W = a*[I;I] 인 순수 축소만 있어도 이 값은 |1 - a| 가 되고, lr=1e-4/wd=1.0/40k step
+        이면 a -> 0.019 라 값이 0.98 까지 올라간다.  실측(step 1139): dev=0.0882 중
+        축소분 |1-a|=0.0866, 방향 잔차는 0.0170 뿐이었다.
+        판정에 쓸 값은 checkpoint 의 W 에서 사후 분해한
+            a = <W, [I;I]> / 2D,   잔차 = ‖W - a*[I;I]‖_F / ‖[I;I]‖_F
+        중 잔차 쪽이다.  W 는 state_dict 에 그대로 남으므로 재학습 없이 계산할 수 있다.
+        """
+        D = self.config.hidden_size
+        dev = self.y_concat_proj.weight.detach().float().clone()   # [D, 2D]
+        dev[:, :D].diagonal().sub_(1.0)
+        dev[:, D:].diagonal().sub_(1.0)
+        return dev.norm() / math.sqrt(2.0 * D)
+
     @torch.no_grad()
     def _latent_diag(self, mu_p, logvar_p, mu_q, logvar_q, kl):
         """Scalar diagnostics for the final (grad-carrying) transition.
@@ -331,6 +388,10 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             # per-position KL: summed over D, averaged over batch and sequence.
             # kl_balance is already folded into `kl`; kl_coef is not.
             out["diag/kl_raw"] = kl.detach().float().sum(-1).mean()
+
+        # concat 사영이 항등에서 얼마나 벗어났는지. 0 이면 add 와 같은 함수다.
+        if self.config.y_inject == "concat":
+            out["diag/y_proj_dev"] = self._y_proj_deviation()
 
         return out
 
@@ -385,7 +446,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                 logvar_p = self.prior_logvar(z_H) + self.prior_logvar_bias
 
                 if use_posterior:
-                    u_y = z_H + y_emb  # concat하기
+                    u_y = self._inject_y(z_H, y_emb)
                     mu_q = self.post_mu(u_y)
                     logvar_q = self.post_logvar(u_y) + self.post_logvar_bias
                     eps = self.reparameterize(mu_q, logvar_q)
@@ -410,7 +471,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         logvar_p = self.prior_logvar(z_H) + self.prior_logvar_bias
 
         if use_posterior:
-            u_y = z_H + y_emb
+            u_y = self._inject_y(z_H, y_emb)
             mu_q = self.post_mu(u_y)
             logvar_q = self.post_logvar(u_y) + self.post_logvar_bias
             eps = self.reparameterize(mu_q, logvar_q)
