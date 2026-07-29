@@ -60,6 +60,9 @@ LOGVARBIAS="${LOGVARBIAS:--4.0}"
 YINJECT="${YINJECT:-add}"
 # cosine decay 하한 비율. 1.0 = decay 없음(기존). 0.1 이면 base_lr 의 10%까지 감쇠.
 LRMIN="${LRMIN:-1.0}"
+# weight decay 예외. 기본 False = 현행 동작(단일 AdamW group).
+NODECAY_YPROJ="${NODECAY_YPROJ:-False}"
+NODECAY_LOGVARBIAS="${NODECAY_LOGVARBIAS:-False}"
 RUN="${RUN:-gram_nq8_v2_a}"
 
 # launch 직전 점유 확인: 다른 작업이 쓰는 GPU면 즉시 중단.
@@ -88,6 +91,7 @@ CUDA_VISIBLE_DEVICES=${GPUS} ${LAUNCH} \
   seed=${SEED} \
   lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 puzzle_emb_weight_decay=1.0 \
   lr_min_ratio=${LRMIN} \
+  nodecay_y_proj=${NODECAY_YPROJ} nodecay_logvar_bias=${NODECAY_LOGVARBIAS} \
   arch.mlp_t=False arch.pos_encodings=rope \
   arch.L_layers=2 \
   arch.H_cycles=3 arch.L_cycles=4 arch.halt_max_steps=16 \

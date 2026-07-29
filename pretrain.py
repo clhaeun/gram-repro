@@ -86,6 +86,13 @@ class PretrainConfig(pydantic.BaseModel):
     dual_eval: bool = False # with ema, also eval the raw (non-EMA) weights and log them under `_raw`
     freeze_weights: bool = False # If True, freeze weights and only learn the embeddings
 
+    # weight decay 예외.  기본 False = 현행과 bit-identical (AdamW 단일 param_group).
+    # 두 대상을 하나로 묶지 않은 이유: y_concat_proj 는 논문에 없는 신규 모듈이라 wd 처리에
+    # 논문 근거가 없지만, logvar_bias 는 기존 완주 run 전부가 wd 걸린 채로 돌았으므로
+    # 빼면 그 run 들과 비교 축이 어긋난다.  독립적으로 켤 수 있어야 한다.
+    nodecay_y_proj: bool = False        # y_concat_proj.weight
+    nodecay_logvar_bias: bool = False   # prior_logvar_bias, post_logvar_bias
+
 @dataclass
 class TrainState:
     model: nn.Module
@@ -114,6 +121,51 @@ def create_dataloader(config: PretrainConfig, split: str, rank: int, world_size:
         persistent_workers=True
     )
     return dataloader, dataset.metadata
+
+
+def _adamw_param_arg(model: nn.Module, config: PretrainConfig):
+    """AdamW 에 넘길 params 인자를 만든다.
+
+    두 nodecay 플래그가 모두 False 면 `model.parameters()` 를 그대로 돌려주므로 호출부가
+    기존과 글자 그대로 같아진다 -- 현행 경로는 bit-identical 하게 남는다.
+
+    켜져 있으면 [{decay group, wd=config.weight_decay}, {nodecay group, wd=0.0}] 두 개의
+    param_group 을 돌려준다.  lr 은 pretrain.py 의 optimizer step 이 `for param_group in
+    optim.param_groups` 로 **전수 순회**하며 설정하므로(인덱스 하드코딩 없음) group 이
+    2 개가 되어도 양쪽 다 갱신된다.
+
+    주의: puzzle_emb 는 `model.parameters()` 가 아니라 `.buffers()` 로 별도 optimizer 에
+    들어가므로 여기서 중복되지 않는다.
+    """
+    targets = []
+    if config.nodecay_y_proj:
+        targets.append("y_concat_proj.weight")
+    if config.nodecay_logvar_bias:
+        targets += ["prior_logvar_bias", "post_logvar_bias"]
+    if not targets:
+        return model.parameters()
+
+    decay, nodecay, hit = [], [], []
+    for name, param in model.named_parameters():
+        if any(name.endswith(t) for t in targets):
+            nodecay.append(param)
+            hit.append(name)
+        else:
+            decay.append(param)
+
+    # 켜 놓고 하나도 안 걸리면 조용히 현행 동작으로 돌아가므로 시끄럽게 죽인다.
+    for t in targets:
+        if not any(name.endswith(t) for name in hit):
+            raise ValueError(
+                f"nodecay 대상 {t!r} 이 모델에 없다. "
+                f"(y_inject={getattr(config.arch, 'y_inject', None)!r} 인데 "
+                f"nodecay_y_proj 를 켠 것은 아닌지 확인해라)")
+
+    print(f"[nodecay] weight_decay=0 대상 {len(nodecay)}개: {hit}", flush=True)
+    return [
+        {"params": decay, "weight_decay": config.weight_decay},
+        {"params": nodecay, "weight_decay": 0.0},
+    ]
 
 
 def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, rank: int, world_size: int):
@@ -147,11 +199,15 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
                 for param in list(model.parameters()) + list(model.buffers()):
                     dist.broadcast(param, src=0)
 
+    # AdamW 에 넘길 인자.  두 nodecay 플래그가 모두 False 면 model.parameters() 를 글자
+    # 그대로 돌려주므로 기존 경로가 bit-identical 하게 남는다.
+    adamw_params = _adamw_param_arg(model, config)
+
     # Optimizers and lr
     if config.arch.puzzle_emb_ndim == 0:
         optimizers = [
             AdamW(
-                model.parameters(),
+                adamw_params,
                 lr=0,  # Needs to be set by scheduler
                 weight_decay=config.weight_decay,
                 betas=(config.beta1, config.beta2)
@@ -182,7 +238,7 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
                 world_size=world_size
             ),
             AdamW(
-                model.parameters(),
+                adamw_params,
                 lr=0,  # Needs to be set by scheduler
                 weight_decay=config.weight_decay,
                 betas=(config.beta1, config.beta2)

@@ -41,3 +41,8 @@ ema: False # use Exponential-Moving-Average
 ema_rate: 0.999 # EMA-rate
 dual_eval: False # with ema, also eval the raw (non-EMA) weights each eval; logged under `_raw`
 freeze_weights: False # If True, freeze weights and only learn the embeddings
+
+# weight decay 예외. 기본 False = 현행 동작(AdamW 단일 param_group)과 bit-identical.
+# hydra 가 struct 모드라 여기에 없으면 override 자체가 거부된다.
+nodecay_y_proj: False      # y_concat_proj.weight 를 weight_decay=0 group 으로
+nodecay_logvar_bias: False # prior/post_logvar_bias 를 weight_decay=0 group 으로
