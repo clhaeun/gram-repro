@@ -64,22 +64,31 @@
 **헤드라인은 50번 자산 기준이다.** 29번 수치는 이 박스에서 재현·재측정이 불가능하므로(§0 주의 1)
 별도 행으로 분리하고 출처를 명시한다.
 
-| server | run / checkpoint | Accuracy (단일시도 valid) | Coverage@20 | Consistent | pass@20 |
-|---|---|---|---|---|---|
-| **50** | **`nq8_v2_sum007_catnd_s0` / `step_39865.live`** | **0.9843** | **0.9847** | **1.0000** | 1.0000 |
-| 50 | `nq8_v2_sum007_add_s0` / `step_29614.live` | 0.9612 | 0.9835 | 0.9996 | 1.0000 |
-| 50 | `nq8_on_b500_s1` / `step_33031.live` | 0.9331 | 0.9875 | 0.9999 | 1.0000 |
-| 29 | `nq8_on_b500_ema6k` / `step_31892.live` | 0.9882 | 0.9937 | 0.9997 | 1.0000 |
-| 29 | `nq8_on_b560_ema6k` / 정점 `.live` | 0.9856 | 0.9844 | 1.0000 | 1.0000 |
-| 29 | `nq8_v2_base_b500_s0` / 정점 `.live` | **0.9977 (미검증)** | 미통보 | 미통보 | 미통보 |
-| — | **논문 (Table 1)** | **0.997 ± 0.003** | **0.903 ± 0.019** | 미기재 | 미기재 |
+| server | run / checkpoint | step_kind | Accuracy (단일시도 valid) | Coverage@20 | pass@20 | maj@20 | vsel@20 | dist@20 |
+|---|---|---|---|---|---|---|---|---|
+| **29** | **`nq8_v2_base_b500_s0` / `step_37587.live`** | **peak** | **0.9977** | **0.9964** | 1.0000 | 1.0000 | 0.9987 | 1.65 |
+| 29 | `nq8_v2_base_b500_s0` / `step_39865.live` | **final** | **0.9753** | 0.9804 | 1.0000 | 0.9929 | 0.9838 | 1.82 |
+| 29 | `nq8_on_b500_ema6k` / `step_31892.live` | peak | 0.9882 | 0.9937 | 1.0000 | — | — | — |
+| 29 | `nq8_on_b560_ema6k` / 정점 `.live` | peak | 0.9856 | 0.9844 | 1.0000 | — | — | — |
+| **50** | **`nq8_v2_sum007_catnd_s0` / `step_39865.live`** | peak | **0.9843** | **0.9847** | 1.0000 | — | — | — |
+| 50 | `nq8_v2_sum007_add_s0` / `step_29614.live` | peak | 0.9612 | 0.9835 | 1.0000 | — | — | — |
+| 50 | `nq8_on_b500_s1` / `step_33031.live` | peak | 0.9331 | 0.9875 | 1.0000 | — | — | — |
+| — | **논문 (Table 1)** | 미기재 | **0.997 ± 0.003** | **0.903 ± 0.019** | 미기재 | 미기재 | 미기재 | 미기재 |
 
-- **50번 최고 = 0.9843** 이고 논문 0.997±0.003 과는 **−1.3%p** 차다(논문 구간 밖).
-  출처 `experiments/results/v2_nq8_v2_sum007_catnd_s0_step_39865_live_s{0,1}.json`.
-- **29번 0.9882 / 0.9856 은 이 박스 자산이 아니다.** 결과 JSON 만 있고 가중치가 없어 재측정
-  불가하다. 근거 [REPORT_b45_band_29.md](reports/archive/REPORT_b45_band_29.md).
-- **29번 0.9977 은 검증하지 못했다.** run 이름·결과 JSON 모두 이 박스에 없다(§0 주의 3).
-  **논문값 0.997 을 유일하게 넘는 수치이므로 원본 JSON 확보가 필요하다** — §5 질문 7.
+- **8×8 최고 = 29번 `nq8_v2_base_b500_s0` 정점 0.9977 이고, 논문 구간(99.4~100.0) 안에 들어간다.**
+  근거 `experiments/results/band_nq8_v2_base_b500_s0_live_s{0,1}.json` (harness seed 0/1),
+  checkpoint `step_37587.live`. 이전 판(2026-07-30 오전)에서 "미검증"으로 적었던 것은 그 시점에
+  결과 JSON 이 repo 에 없었기 때문이고, 29번이 `fc7edd4` 로 올려 확정됐다.
+- **정점과 최종을 반드시 병기한다 — 격차 2.24%p 가 선택 효과의 크기다.** 정점 `step_37587` 은
+  **test set 으로 checkpoint 를 고른 결과**이므로 낙관 편향을 포함한다. 최종 `step_39865` 는
+  그 편향이 없고 0.9753 이다. 논문이 어느 쪽 규칙을 썼는지는 미기재 — §5 질문 4.
+- **이 run 의 EMA 는 두 지점 다 0.0000 이다.** 39,885 step 에서 종료돼 EMA 가 수렴 전이다
+  (`consistent` 는 0.43 / 0.62 로 남아 있어 "죽은" 게 아니라 미수렴이다). §3-3 의 EMA 늦은 수렴이
+  같은 현상이다.
+- **50번 최고 = 0.9843** 으로 논문 대비 **−1.3%p**(구간 밖).
+  출처 `v2_nq8_v2_sum007_catnd_s0_step_39865_live_s{0,1}.json`.
+- **29번 run 은 이 박스에서 재측정할 수 없다** — 가중치가 없다(§0 주의 1). 다만 `run_configs/hinton/`
+  으로 **config 대조는 가능해졌다**(§2).
 - **coverage 가 논문을 넘는 것은 자랑거리가 아니다.** test 셋의 64%가 해 1개짜리라 coverage
   상한이 1.0 에 붙어 있다([REPORT_b45_band_29.md](reports/archive/REPORT_b45_band_29.md) §4).
   논문과 같은 축인지 미확인 — §5 질문 1.
@@ -175,8 +184,33 @@ epochs 1,260, `eval_interval=30`, `dual_eval=True`. **29번의 β=5.2 계열과 
 ## 2. 확정 config 와 논문 대비 차이
 
 기준: `checkpoints/Nqueens-8-ACT-torch/nq8_v4_catnd_b007_s2/all_config.yaml` (**server 50**,
-최신 8×8 arm). 29번 run 의 config 는 이 박스에 `all_config.yaml` 이 없어 대조하지 못했다 —
-29번 대역(β 4.0~5.6)이 같은 손잡이 조합인지 **미확인**이다.
+최신 8×8 arm).
+
+**29번 config 대조 구멍은 닫혔다** — 29번이 `run_configs/hinton/` 에 64개 `all_config.yaml`
+사본을 올렸다(`c195a36`). β≥4.0 대역 + `base_b500` 계열 **29 run** 을 대조한 결과:
+
+| 항목 | 29번 대역 | 50번 기준 | 판정 |
+|---|---|---|---|
+| `kl_reduction` | **mean (전 run)** | **sum** | **다르다 — 환산하면 같은 영역(§2.1)** |
+| `y_onehot` | True (OFF 계열 2개 제외) | True | 일치 |
+| `y_inject` | v2/v5 계열만 명시(add/concat), 그 외 **키 없음**(구코드) | concat | **부분 일치** |
+| `logvar_bias_init` | v2/v5 계열만 명시(0.0 / −4.0), 그 외 키 없음 | 0.0 | **부분 일치** |
+| `nodecay_y_proj` / `nodecay_logvar_bias` | v5 계열만 False/False, 그 외 **키 없음** | True / False | **불일치** |
+| `epochs` | 3,000 / 6,000 / 7,000 / 12,000 혼재 | 12,000 | **다르다 — §2.1 의 예산 함정** |
+| `lr_min_ratio` / `weight_decay` | 1.0 / 1.0 | 1.0 / 1.0 | 일치 |
+| `ema` / `dual_eval` | True / True (`_ema6k` 이후) | True / True | 일치 |
+| `hidden_size` / `H,L_cycles` / `halt_max_steps` | 512 / 3,4 / 16 | 동일 | 일치 |
+
+- **최고 수치 run `nq8_v2_base_b500_s0` 의 손잡이**: β 5.0 mean(= sum 0.0625), `y_inject=add`,
+  **`logvar_bias_init=−4.0`**, `y_onehot=True`, epochs 7,000, seed 0, EMA+dual_eval.
+  **50번 최고(`v2_sum007_catnd_s0`)와 `y_inject`·`logvar_bias_init` 이 정반대다**
+  (concat/0.0 vs add/−4.0). 즉 8×8 상위권은 이 두 손잡이에 **둔감**하다 — 둘 다 0.98 이상.
+- **`nodecay_*` 키가 29번 구코드 run 에는 없다.** 키 부재는 코드 기본값으로 돈 것이고 기본값이
+  버전에 따라 달랐을 수 있어, **29번 구코드 run 과 50번 v4 를 손잡이 단위로 1:1 비교하는 것은
+  여전히 불가능하다.** 대역 비교(β)까지만 유효하다.
+- **집계에서 제외**: `run_configs/hinton/README.md` 가 명시한 검증용 probe 4개
+  (`nd_off_cat_m4`, `nd_off_cat_m4_b`, `nd_yproj_on`, `nd_both_on`, 1~102 step) 와
+  `p100_*` / `probe_*` (18 step / 1 step) 는 학습 실험이 아니다.
 
 | 항목 | 우리 값 | 논문 | 판정 |
 |---|---|---|---|
@@ -197,14 +231,39 @@ epochs 1,260, `eval_interval=30`, `dual_eval=True`. **29번의 β=5.2 계열과 
 (8×8), 28 + 16 = **44** (GC-8). 따라서 **sum β 1 ≡ mean β 80**이고, 논문의 0.07 이 어느 눈금인지에
 따라 우리 값의 의미가 80배 달라진다.
 
-- 논문 0.07 이 **sum** 이라면 우리 0.07 은 논문값 그대로다.
-- 논문 0.07 이 **mean** 이라면 등가점은 **sum 0.07/80 = 0.000875** 이고, 우리가 정점을 찾은
-  대역(sum 1.6~5.0)은 논문의 **1,800~5,700배**다.
-- 역방향 검증도 했다: 논문 0.07 을 sum 으로 보고 mean 환산한 β=5.6 대역을 실측했더니
-  **작동하지 않았다**(0.00%, [REPORT_grid_upper_29.md](reports/archive/REPORT_grid_upper_29.md)).
+환산식: `KL_sum = L × KL_mean` 이므로 **β_sum = β_mean / L**.
 
-→ **논문 눈금 미확정이 남은 최대 리스크다** (§5 질문 2). GC 는 논문이 8-node 0.5 를 명시해
-우리가 그 값을 그대로 썼고, 결과도 논문 수준이다 — **GC 는 눈금이 sum 쪽임을 시사하는 간접 증거다.**
+**두 서버의 눈금이 달랐고, 환산하면 같은 영역이었다** (`run_configs/hinton/` 64개 config 대조로
+2026-07-30 확인). 이것이 지금까지 β 판단을 어지럽힌 원인이다:
+
+| server | 표기 눈금 | 표기 β | **β_sum 환산** | β_mean 환산 | 대표 run |
+|---|---|---|---|---|---|
+| 29 | **mean** | 4.0 ~ 5.6 | **0.050 ~ 0.070** | 4.0 ~ 5.6 | `nq8_on_b{400..560}_ema6k`, `nq8_v2_base_b500_s0` |
+| 50 | **mean** | 5.0 | **0.0625** | 5.00 | `nq8_on_b500_{s1,s2,decay}` |
+| 50 | **sum** | 0.07 | **0.0700** | 5.60 | `nq8_v2_sum007_*`, `nq8_v4_*` |
+| — | 논문 | 0.07 | 0.07 (sum 해석) | 5.60 | — |
+
+- **두 서버가 독립적으로 β_sum 0.05~0.07 에 도달했다.** 8×8 상위 수치 전부가 이 구간이다:
+  0.9977(29, mean 5.0 = sum 0.0625), 0.9882(29, mean 5.0), 0.9856(29, mean 5.6 = sum 0.070),
+  0.9843(50, sum 0.070), 0.9331(50, mean 5.0).
+- **즉 논문 0.07 을 sum 으로 읽는 것이 실측과 맞는다.** GC 도 논문 명시값 0.5 를 sum 으로 써서
+  논문 수준 결과가 나왔다(§1.3). 10×10 도 같다 — 50번 sum 0.045, 29번 mean 5.2 인데
+  0.045 × 116 = 5.22 로 **같은 점**이다.
+- **"mean 환산 대역 5.6 이 죽었다"는 과거 결론은 β 문제가 아니라 예산 문제였다.**
+  [REPORT_grid_upper_29.md](reports/archive/REPORT_grid_upper_29.md) 가 0.00% 로 보고한
+  `nq8_on_b{450,560}_ema` 는 **3,000 epochs** run 이고, 같은 β 를 **6,000 epochs** 로 돌린
+  `_ema6k` 는 0.9527 / 0.9856 이다:
+
+| β (mean) | 3,000 epochs | 6,000 epochs | 배율 |
+|---|---|---|---|
+| 4.5 | `nq8_on_b450_ema` **0.0007** | `nq8_on_b450_ema6k` **0.9527** | **1,360배** |
+| 5.6 | `nq8_on_b560_ema` **0.0000** | `nq8_on_b560_ema6k` **0.9856** | — |
+
+  **§3-3(EMA 늦은 수렴) 과 같은 함정이다.** 논문 예산 3,000 epochs 에서 끊으면 정답 β 조차
+  0% 로 보인다 — §2.2 와 §5 질문 4 가 여기에 걸린다.
+
+→ **눈금 리스크는 해소됐다.** 남은 것은 "논문이 3,000 epochs 로 0.997 을 냈다면 우리와 무엇이
+다른가" 이고, 이것이 이제 최대 미해결이다.
 
 ### 2.2 epochs — 4배 더 돌렸다
 
@@ -384,3 +443,47 @@ epochs 1,260, `eval_interval=30`, `dual_eval=True`. **29번의 β=5.2 계열과 
    될 수 있는데, 지금 상태로는 인용할 수 없다.** JSON + `all_config.yaml` 이 필요하다.
 8. **29번 자산을 50번으로 옮길 것인가?** 29번 run 26+개는 결과 JSON 만 있고 가중치가 없어
    재측정·재현이 불가능하다(§0). 최종 보고에 쓸 run 만이라도 checkpoint 를 받아둘지.
+
+---
+
+## 6. 패널 캡션 (wandb `GRAM-repro-summary`)
+
+`python experiments/wandb_harness_upload.py --mode unified --panels --commit` 로 올린다.
+표는 `summary/all` (646행 × 27열), 패널은 `panel/*`. **모든 캡션에 축을 박는다.**
+
+**공통 축 규약** — 가중치 `live`(raw SGD) / `EMA`, 집계 **단일시도 = pass@1**,
+`step_kind` **peak**(=test set 으로 고른 step, **선택 효과 포함**) / **final**(마지막 step,
+선택 효과 없음) / peak+final(둘이 같은 step).
+
+**Panel A — ours vs paper.** 왼쪽은 단일시도 valid, `weights=live`. nq8 은
+peak 0.998 / final 0.976 / 논문 0.997 로, **논문값이 우리 peak 과 final 사이에 있다**
+— peak 만 인용하면 논문을 넘고, final 만 인용하면 못 넘는다. 격차 2.24%p 가 선택 효과의 크기다.
+GC conflict 는 스케일이 달라(0.02 vs 2.7) **오른쪽 별도 축 + log scale** 로 분리했다 —
+이중 y축은 쓰지 않았다. nq10 에 final 막대가 없는 것은 29번 측정이 peak+final 한 지점뿐이기 때문이다.
+
+**Panel F — 다양성과 정확도.** distinct@20(1~20)과 단일시도 valid(0~1)은 **다른 축이고,
+distinct 는 정확도가 아니다.** 이중 y축 대신 좌우 subplot 으로 분리했다(지시는 "겹치기"였으나
+스케일이 달라 겹치면 오독을 만든다 — 분리로 바꿨다). task 별 min/max 를 보여준다:
+nq8 은 distinct 가 1.65~2.79 로 거의 결정론인데 valid 가 0.98 이고, gc8 은 distinct 20.00
+(20 샘플 전부 다름)인데 valid 0.98 이다 — **다양성과 정확도가 독립임을 보여주는 대비다.**
+
+**Panel G — 실패 3종.** prior vs posterior, 같은 0~1 축, `.live` 우선(없으면 `step_N`).
+lr decay 0.033/0.859, forcehalt(β_mean 1.0) 0.008/0.951, 저β(β_sum 0.0009) 0.000/0.997.
+**세 경우 모두 posterior 는 살아 있고 prior 만 죽는다** — §3-4 의 posterior shortcut 이
+실패 기전이라는 근거다. (저β run 은 EMA off 라 `step_N` 이 곧 raw 다.)
+
+**GC conflict 의 ± 는 run 간 std(논문 축)이다** — 예측 5,100개(255 퍼즐 × 20 샘플) 사이의
+std(±0.169)가 아니다. 축을 혼동한 이력이 있다([REPORT_gc8_50.md](reports/archive/REPORT_gc8_50.md) §3-1).
+**그리고 우리 GC 3-run 은 순수 seed 반복이 아니라 arm 이 섞인 근사다**(concat s0/s1 + add s0).
+논문의 "over runs" 와 같은 축이 되려면 단일 config seed 반복이 필요하다 — seed 2/3 학습 중,
+seed 4 대기(§5.1 항목 4).
+
+### 6.1 표의 한계
+
+- **`server=?` 8행** (`gram_nq8_fix_b`, `nq8_b{03,07,15,30}`) — `all_config.yaml` 이 두 박스
+  어디에도 없어 서버를 판정하지 못했다. β·손잡이 열도 비어 있다.
+- **`metric_type=inloop` 71행은 harness 와 섞어 읽으면 안 된다** — 단일 배치 accuracy 이고
+  coverage 가 없다. harness 미측정 run(v4 등)이 표에서 사라지지 않게 넣은 것이다.
+- **`beta_sum`/`beta_mean` 은 `kl_reduction` 키가 있는 run 만 채워진다.** 29번 구코드 run 은
+  키가 없어 눈금 불명이고 두 열이 비어 있다(§2).
+- probe run 제외: `nd_off_cat_m4`, `nd_off_cat_m4_b`, `nd_yproj_on`, `nd_both_on`, `p100_*`, `probe_*`.
