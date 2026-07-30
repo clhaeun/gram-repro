@@ -58,51 +58,66 @@ def build_pairs(config: DataProcessConfig):
     removals = tuple(int(x) for x in config.removals.split(",")) if config.removals else DEFAULT_REMOVALS[n]
 
     # All complete solutions, by backtracking
-    sols = []
-    cols = [0] * n
-    used_c, used_d, used_a = [False] * n, [False] * (2 * n - 1), [False] * (2 * n - 1)
+    sols = []      # 정답 체스판을 tuple 형식(= 각 행의 열 번호들)으로 계속해서 append
+    cols = [0] * n   # cols[행 번호] = 열 번호
+    used_c, used_d, used_a = [False] * n, [False] * (2 * n - 1), [False] * (2 * n - 1)  # column, diagonal, anti-diagonal
 
     def place(r):
+        # 모든 행 다 채움
         if r == n:
             sols.append(tuple(cols))
             return
+        # 모든 열 순회
         for c in range(n):
-            if not (used_c[c] or used_d[r - c + n - 1] or used_a[r + c]):
+            if not (used_c[c] or used_d[r - c + n - 1] or used_a[r + c]):  # r-c+n-1, r+c이
                 used_c[c] = used_d[r - c + n - 1] = used_a[r + c] = True
-                cols[r] = c
+                cols[r] = c   # sols에 채울 cols 값
                 place(r + 1)
-                used_c[c] = used_d[r - c + n - 1] = used_a[r + c] = False
+                used_c[c] = used_d[r - c + n - 1] = used_a[r + c] = False  # 재귀의 끝이 r==n이 아니라 여기로 돌아온거면 어떤 행에서 실패한거니까, 직전꺼까지 False로 잡아주기
 
     place(0)
-    sols = np.array(sorted(sols), dtype=np.int32)
+    sols = np.array(sorted(sols), dtype=np.int32)  # 왜 int32로 설정하는지?
     assert sols.shape[0] == SOLUTION_ANCHORS.get(n, sols.shape[0]), f"solver bug: {sols.shape[0]} solutions for n={n}"
 
     # Every way of deleting k of the n queens -> the survivors are the clues
+    # 0부터 n-1까지의 전체 행 중에서, 버릴 행 k개를 뽑는 모든 조합 / 버리고 남은 걸 오름차순 정리, tuple로 묶기
     keep_sets = [tuple(sorted(set(range(n)) - set(drop)))
                  for k in removals for drop in itertools.combinations(range(n), k)]
     assert keep_sets, f"removals={removals} produce no clue sets for n={n}"
 
+    # input: {"발급된 해시값(문제)": ((행 1, 열 2), (행 4, 열 5)...), : ~ } 형태로 문제의 이름표(해시)와 퀸의 단서 좌표 묶음을 1:1로 매핑
     key_to_clues = {}
+    # label: {"발급된 해시값(문제)": [label 14, label 55], : ~ }
     rows_by_key = defaultdict(list)
 
+    # label(정답 보드) 하나씩 꺼내기
     for si, sol in enumerate(tqdm(sols, desc="Generating pairs")):
+        # 살려둘 퀸들만 찍기
         for keep in keep_sets:
+            # 살아남기로 한 행(r)에 대해서만 정답 보드의 열 위치(sol[r]) 가져옴 -> 살아남는 (행, 열)
             clues = tuple((r, int(sol[r])) for r in keep)
 
+            # 1로 채운 빈 보드판
             board = np.ones(n * n, dtype=np.uint8)
+            # 빈 보드판에 퀸(단서) 찍기 -> hash 뽑기 위해서
             for r, c in clues:
                 board[r * n + c] = 2
+            # 해시 발급
             h = hashlib.sha1(board.tobytes()).hexdigest()[:16]
 
+            # key_to_clues 딕셔너리에 저장. 같은 해시에 다른 clues 가 오면 sha1 충돌이므로 즉시 중단
             assert key_to_clues.setdefault(h, clues) == clues, f"sha1 collision on {h}"
+            # 해시값 - label 매칭
             rows_by_key[h].append(si)
 
     num_pairs = sum(len(v) for v in rows_by_key.values())
     assert num_pairs == PAIR_ANCHORS.get(n, num_pairs), f"pair anchor mismatch: {num_pairs}"
 
     # Split unique inputs 85:15
+    # train/test 데이터
     unique_keys = sorted(key_to_clues)
     perm = np.random.default_rng(config.seed).permutation(len(unique_keys))
+    # train_frac = 0.85
     n_train = int(round(config.train_frac * len(unique_keys)))
     train_keys = [unique_keys[i] for i in perm[:n_train]]
     test_keys = [unique_keys[i] for i in perm[n_train:]]
@@ -110,29 +125,39 @@ def build_pairs(config: DataProcessConfig):
     return sols, removals, key_to_clues, rows_by_key, train_keys, test_keys
 
 
+# hash와 그에 따른 좌표 튜플들을 받아서 input/labels를 만듬
 def convert_subset(set_name: str, keys, sols, key_to_clues, rows_by_key, config: DataProcessConfig):
     n = config.n
     grid_size = (n, n)
 
     # Generate dataset
+    # group_indices = 데이터 행렬에서 몇번째 row까지가 같은 input에 대응하는 label인지 / puzzle_indices: 걍 1씩 커짐.
     results = {k: [] for k in ["inputs", "labels", "puzzle_identifiers", "puzzle_indices", "group_indices"]}
+    # (문제-정답) 쌍 count
     puzzle_id = 0
     example_id = 0
 
+    # 경계선
     results["puzzle_indices"].append(0)
     results["group_indices"].append(0)
 
+    # 각 unique input(hash)
     for h in tqdm(sorted(keys), desc=f"Processing {set_name}"):
+        # NxN 크기의 1차원 input 배열을 0으로 초기화
         inp = np.zeros(n * n, dtype=np.int32)
+        # 단서 퀸이 있는 자리를 1로
         for r, c in key_to_clues[h]:
             inp[r * n + c] = 1
 
         # One row per consistent solution; test keeps only the first
+        # solution indexes: 각 hash에 대해 똑같은 문제를 여러 번 풀지 않도록 1개(해시: [label 1])만 남김 - dataloader는 일단 (문제, 정답) 형태로 처리, 출력
         sidxs = sorted(rows_by_key[h])
         if set_name == "test":
             sidxs = sidxs[:1]
 
+        # test/train에 해당하는 hash만 뽑아옴
         for si in sidxs:
+            # NxN 크기의 1차원 label 배열을 0으로 초기화
             lab = np.zeros(n * n, dtype=np.int32)
             for r, c in enumerate(sols[si]):
                 lab[r * n + c] = 1
@@ -149,6 +174,7 @@ def convert_subset(set_name: str, keys, sols, key_to_clues, rows_by_key, config:
         results["group_indices"].append(puzzle_id)
 
     # To Numpy, shifting raw {0, 1} to tokens {1, 2} so PAD id 0 stays unused
+    # 0/1 -> 1/2로.
     results = {
         "inputs": np.vstack(results["inputs"]).astype(np.int32) + 1,
         "labels": np.vstack(results["labels"]).astype(np.int32) + 1,
