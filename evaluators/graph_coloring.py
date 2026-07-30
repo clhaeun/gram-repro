@@ -37,7 +37,8 @@ COLOR_MIN, COLOR_MAX = 3, 5
 
 
 def n_from_seq_len(seq_len: int) -> int:
-    """Invert seq_len = n(n-1)/2."""
+    # 시퀀스 길이 받아서 -> 노드 개수 반환
+    # Invert seq_len = n(n-1)/2.
     n = int(round((1 + (1 + 8 * seq_len) ** 0.5) / 2))
     if n * (n - 1) // 2 != seq_len:
         raise ValueError(f"seq_len={seq_len}이 n(n-1)/2 꼴이 아니다. n을 명시해라.")
@@ -45,15 +46,21 @@ def n_from_seq_len(seq_len: int) -> int:
 
 
 def verify_colorings(preds: np.ndarray, inputs: np.ndarray, n: int) -> Dict[str, np.ndarray]:
-    """preds/inputs: [B, n(n-1)/2] int. 반환: 각 [B]."""
+    # preds/inputs: [B, n(n-1)/2] int. 채점결과: 각 [B]
     B = preds.shape[0]
+    # 가능한 간선들의 idx (출발-도착)
     iu, iv = np.triu_indices(n, 1)
 
+    # 노드에 칠해진 색들 n개
     colors = preds[:, :n]                                   # [B, n]
+    # 주어진 색으로 칠해진 게 맞는지 
     colors_ok = ((colors >= COLOR_MIN) & (colors <= COLOR_MAX)).all(-1)
 
+    # 실제로 해당 문제에서 연결된 부분
     edge = inputs == EDGE                                   # [B, P]
+    # 동일 간선에 연결된 노드 2개의 색이 같은지
     same = colors[:, iu] == colors[:, iv]                   # [B, P]
+    # 연결됨 & 색 동일 -> conflict!임
     conflicts = (edge & same).sum(-1)
 
     valid = colors_ok & (conflicts == 0)

@@ -35,30 +35,36 @@ QUEEN = 2
 # 학습 시 제공한 정답지와 얼마나 일치하는지 x
 # 체스 룰을 제대로 지켰는지 rule-based로 처리
 def verify_boards(preds: np.ndarray, inputs: np.ndarray, n: int) -> Dict[str, np.ndarray]:
-    """preds/inputs: [B, n*n] int. 반환: 각 [B] bool."""
+    # preds/inputs: [B, n*n] int. 반환: 각 [B] bool.
     B = preds.shape[0]
+    # Queen이 있는 자리를 True로 표시하는 2차원 boolean 배열
     pq = preds.reshape(B, n, n) == QUEEN
     iq = inputs.reshape(B, n, n) == QUEEN
 
+    # 퀸 개수 8/10개 맞는지
     count_ok = pq.reshape(B, -1).sum(-1) == n
 
+    # 퀸 위치
     rows = np.arange(n)[None, :, None].repeat(B, 0)
     cols = np.arange(n)[None, None, :].repeat(B, 0)
 
     def _no_dup(index_grid: np.ndarray, num_bins: int) -> np.ndarray:
-        """queen이 놓인 칸들의 index가 서로 겹치지 않는지."""
+        # queen이 놓인 칸들의 index가 서로 겹치지 않는지?
         out = np.ones(B, dtype=bool)
         for b in range(B):
             idx = index_grid[b][pq[b]]
             out[b] = len(np.unique(idx)) == len(idx)
         return out
 
+    # 동일 행, 열, 대각선에 2개 이상 퀸이 놓였는지 검사
     row_ok = _no_dup(np.broadcast_to(rows, (B, n, n)), n)
     col_ok = _no_dup(np.broadcast_to(cols, (B, n, n)), n)
     d1_ok = _no_dup(np.broadcast_to(rows - cols, (B, n, n)), 2 * n)
     d2_ok = _no_dup(np.broadcast_to(rows + cols, (B, n, n)), 2 * n)
 
     valid = count_ok & row_ok & col_ok & d1_ok & d2_ok
+
+    # input(iq)를 모델이 
     consistent = (~iq | pq).reshape(B, -1).all(-1)  # 입력 queen ⊆ 출력 queen
 
     return {
@@ -66,7 +72,6 @@ def verify_boards(preds: np.ndarray, inputs: np.ndarray, n: int) -> Dict[str, np
         "consistent": consistent,
         "strict": valid & consistent,
         "queen_count": pq.reshape(B, -1).sum(-1),
-        # 실패 사유 분해용 하위 제약 (Task 5). 전부 [B] bool.
         "count_ok": count_ok,
         "row_ok": row_ok,
         "col_ok": col_ok,
@@ -79,6 +84,7 @@ class NQueens:
     required_outputs = {"inputs", "preds"}
 
     def __init__(self, data_path: str, eval_metadata: Any, n: Optional[int] = None, **kwargs):
+        # 총 칸 개수
         seq_len = getattr(eval_metadata, "seq_len", None)
         if n is None:
             if seq_len is None:
@@ -90,13 +96,15 @@ class NQueens:
         self._acc = None
 
     def begin_eval(self):
-        # [n_total, n_valid, n_consistent, n_strict, queen_sum]
+        # 채점 결과: 전체 문제 수, valid 통과 수, consistent 통과 수, strict(valid&consistent) 통과 수, 퀸 개수 합; [n_total, n_valid, n_consistent, n_strict, queen_sum]
         self._acc = np.zeros(5, dtype=np.float64)
 
+    # 배치마다 채점
     def update_batch(self, batch: Dict[str, torch.Tensor], preds: Dict[str, torch.Tensor]):
         if self._acc is None:
             self.begin_eval()
 
+        # 텐서 -> 넘파이 배열
         p = preds["preds"].detach().cpu().numpy()
         x = batch["inputs"].detach().cpu().numpy()
 
@@ -106,6 +114,7 @@ class NQueens:
             return
         p, x = p[keep], x[keep]
 
+        # preds, inputs 검사
         r = verify_boards(p, x, self.n)
         self._acc += np.array([
             len(p),
@@ -115,8 +124,10 @@ class NQueens:
             r["queen_count"].sum(),
         ], dtype=np.float64)
 
+    # eval 결과
     def result(self, save_path, rank, world_size, group=None):
         acc = self._acc if self._acc is not None else np.zeros(5)
+        # 여러 서버 사용 시?
         if world_size > 1:
             t = torch.tensor(acc, dtype=torch.float64)
             dist.reduce(t, dst=0, op=dist.ReduceOp.SUM, group=group)
@@ -125,9 +136,9 @@ class NQueens:
             return None
         total = max(acc[0], 1.0)
         return {
-            # 논문 Table 1 "Accuracy" 대응: 제약 만족만, input 보존 안 봄
+            # 논문 Table 1 "Accuracy": valid
             "nqueens/accuracy": float(acc[1] / total),
-            # 이하 우리 자체 진단 (논문에 없는 지표)
+            # 논문에는 없긴함
             "nqueens/strict_accuracy": float(acc[3] / total),
             "nqueens/consistent_rate": float(acc[2] / total),
             "nqueens/queen_count_mean": float(acc[4] / total),
