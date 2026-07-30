@@ -77,20 +77,26 @@ def load_results(pattern=RESULTS):
             skipped += 1          # diag_*/contradiction_* 등 다른 스키마
             continue
         project, run, step, live = m.group(1), m.group(2), int(m.group(3)), bool(m.group(4))
-        p, q = d["prior_all_samples"], d["posterior"]
+        p, q = d["prior_all_samples"], (d.get("posterior") or {})
+        # Graph Coloring 결과는 consistent/queen_count_* 가 없고 conflicts_* 를 쓴다.
+        # 과제별 키를 필수로 읽으면 GC 파일에서 KeyError 가 난다 -> 전부 .get 으로 읽고
+        # 없는 값은 None 으로 둔다(쓰는 쪽에서 None 을 걸러낸다).
         out.append(dict(
             file=f, family=os.path.basename(f).split("_")[0],
             project=project, run=run, step=step,
             weights="live" if live else "step_N",
             seed=d.get("seed"), N=d.get("N"), sigma_scale=d.get("sigma_scale"),
-            prior_valid=p["valid"], prior_consistent=p["consistent"], prior_strict=p["strict"],
-            queens_mean=p["queen_count_mean"], queens_min=p["queen_count_min"],
-            queens_max=p["queen_count_max"],
-            posterior_valid=q["valid"], posterior_strict=q["strict"],
-            pass_at_1=d["pass_at"].get("1"), pass_at_20=d["pass_at"].get("20"),
-            majority_at_N=d["majority_at_N_valid"],
-            verifier_sel_at_N=d["verifier_selected_at_N_valid"],
-            distinct_at_N=d["distinct_at_N_mean"],
+            prior_valid=p.get("valid"), prior_consistent=p.get("consistent"),
+            prior_strict=p.get("strict"),
+            queens_mean=p.get("queen_count_mean"), queens_min=p.get("queen_count_min"),
+            queens_max=p.get("queen_count_max"),
+            conflicts_mean=p.get("conflicts_mean"), conflicts_std=p.get("conflicts_std"),
+            posterior_valid=q.get("valid"), posterior_strict=q.get("strict"),
+            pass_at_1=(d.get("pass_at") or {}).get("1"),
+            pass_at_20=(d.get("pass_at") or {}).get("20"),
+            majority_at_N=d.get("majority_at_N_valid"),
+            verifier_sel_at_N=d.get("verifier_selected_at_N_valid"),
+            distinct_at_N=d.get("distinct_at_N_mean"),
             puzzles_ge1_valid=d.get("puzzles_with_ge1_valid"),
         ))
     return out, skipped
@@ -153,6 +159,9 @@ def build_summary(recs, meta):
     포인트가 3개 미만이면 곡선으로 보지 않고 peak 을 만들지 않는다.
     """
     out = {"harness/n_results": len(recs)}
+    recs = [r for r in recs if r.get("prior_valid") is not None]
+    if not recs:
+        return out
     live0 = sorted([r for r in recs if r["weights"] == "live" and r["seed"] == 0],
                    key=lambda r: r["step"])
     if len(live0) >= 3:
@@ -169,6 +178,7 @@ def build_summary(recs, meta):
             "harness/live_peak_majority_at_20": best["majority_at_N"],
             "harness/live_peak_distinct_at_20": best["distinct_at_N"],
             "harness/live_peak_queens_mean": best["queens_mean"],
+            "harness/live_peak_conflicts_mean": best.get("conflicts_mean"),
         })
         # 같은 step 의 EMA/raw 대조가 있으면 함께
         same = [r for r in recs if r["weights"] == "step_N" and r["step"] == best["step"]]
@@ -183,7 +193,7 @@ def build_summary(recs, meta):
     for k, v in meta.items():
         if v is not None:
             out[f"harness/cfg_{k}"] = v
-    return out
+    return {k: v for k, v in out.items() if v is not None}
 
 
 # ---------------------------------------------------------------------------
@@ -238,26 +248,50 @@ def beta_pair(cfg, task):
     return (b, b * Lv) if red == "sum" else (b / Lv, b)
 
 
+# coverage 는 N 에 강하게 의존한다(REPORT_FINAL §1.4). 단일 열에 N=20 만 넣으면
+# 그 판정이 표에서 사라지므로 N 별로 쪼갠다. found_mean/total_mean 을 함께 두면
+# 분모를 total 로 하든 N 으로 하든 사후 계산이 되고, coverage 가 "N 샘플 중 정답 비율"이
+# 아니라 "그 퍼즐 해집합의 몇 %를 발견했나" 임이 표에서 드러난다.
 UNIFIED_COLS = ["server", "task", "run", "step", "step_kind", "weights", "metric_type",
                 "y_inject", "logvar_bias", "nodecay_y_proj", "beta_sum", "beta_mean",
-                "seed", "epochs", "harness_seed", "single_valid", "coverage_at20",
+                "seed", "epochs", "harness_seed", "single_valid",
+                "cov_at1", "cov_at5", "cov_at10", "cov_at20",
+                "found_mean", "total_mean",
                 "pass_at20", "majority_at20", "majority_canon_at20", "verifier_at20",
                 "distinct_at20", "conflict_mean", "conflict_std",
-                "single_valid_std", "coverage_at20_std", "source"]
+                "single_valid_std", "coverage_std", "coverage_paper_unknown_N", "source"]
 
 # 논문값. ± 를 담으려면 *_std 열이 필요해 지시 스펙에 2열을 더했다.
+# 논문 coverage 는 **N 이 불명**이다 -- §1.4 에서 "N=1" 가설이 기각됐고 정수 N 어느
+# 하나로도 재현되지 않는다. 그래서 cov_at{1,5,10,20} 에 넣지 않고 전용 열에 둔다.
 PAPER_ROWS = [
     dict(task="nq8", single_valid=0.997, single_valid_std=0.003,
-         coverage_at20=0.903, coverage_at20_std=0.019),
+         coverage_paper_unknown_N=0.903, coverage_std=0.019),
     dict(task="nq10", single_valid=0.897, single_valid_std=0.027,
-         coverage_at20=0.575, coverage_at20_std=0.034),
+         coverage_paper_unknown_N=0.575, coverage_std=0.034),
     dict(task="gc8", conflict_mean=2.7, conflict_std=2.1,
-         coverage_at20=0.858, coverage_at20_std=0.005),
+         coverage_paper_unknown_N=0.858, coverage_std=0.005),
 ]
+
+
+def load_covcurves(pattern="experiments/results/covcurve*.json"):
+    """checkpoint -> {N: coverage}. coverage_curve.py 산출물."""
+    out = {}
+    for f in sorted(glob.glob(pattern)):
+        try:
+            d = json.load(open(f))
+        except Exception:
+            continue
+        ck, ov = d.get("checkpoint"), d.get("overall")
+        if not ck or not isinstance(ov, dict):
+            continue
+        out[ck] = {int(k): v.get("coverage") for k, v in ov.items()}
+    return out
 
 
 def load_unified(pattern=RESULTS):
     """결과 JSON -> unified 행. harness 행만 만든다(in-loop 는 add_inloop_rows)."""
+    curves = load_covcurves()
     raw, skipped = [], 0
     for f in sorted(glob.glob(pattern)):
         try:
@@ -286,14 +320,21 @@ def load_unified(pattern=RESULTS):
             nodecay_y_proj=cfg.get("nodecay_y_proj"),
             beta_sum=bs, beta_mean=bm, seed=cfg.get("seed"), epochs=cfg.get("epochs"),
             harness_seed=d.get("seed"),
-            single_valid=p.get("valid"), coverage_at20=cov.get("coverage"),
+            single_valid=p.get("valid"),
+            # cov_at{1,5,10} 은 coverage_curve.py 를 돌린 checkpoint 에만 있다.
+            cov_at1=(curves.get(d["checkpoint"]) or {}).get(1),
+            cov_at5=(curves.get(d["checkpoint"]) or {}).get(5),
+            cov_at10=(curves.get(d["checkpoint"]) or {}).get(10),
+            cov_at20=cov.get("coverage"),
+            found_mean=cov.get("found_mean"), total_mean=cov.get("total_mean"),
             pass_at20=(d.get("pass_at") or {}).get("20"),
             majority_at20=d.get("majority_at_N_valid"),
             majority_canon_at20=d.get("majority_at_N_valid_canonical"),
             verifier_at20=d.get("verifier_selected_at_N_valid"),
             distinct_at20=d.get("distinct_at_N_mean"),
             conflict_mean=p.get("conflicts_mean"), conflict_std=p.get("conflicts_std"),
-            single_valid_std=None, coverage_at20_std=None, source="ours",
+            single_valid_std=None, coverage_std=None,
+            coverage_paper_unknown_N=None, source="ours",
         ))
     return raw, skipped
 
@@ -349,10 +390,12 @@ def add_inloop_rows(rows):
                     y_inject=cfg.get("y_inject"), logvar_bias=cfg.get("logvar_bias"),
                     nodecay_y_proj=cfg.get("nodecay_y_proj"), beta_sum=bs, beta_mean=bm,
                     seed=cfg.get("seed"), epochs=cfg.get("epochs"), harness_seed=None,
-                    single_valid=val, coverage_at20=None, pass_at20=None,
+                    single_valid=val, cov_at1=None, cov_at5=None, cov_at10=None,
+                    cov_at20=None, found_mean=None, total_mean=None, pass_at20=None,
                     majority_at20=None, majority_canon_at20=None, verifier_at20=None,
                     distinct_at20=None, conflict_mean=None, conflict_std=None,
-                    single_valid_std=None, coverage_at20_std=None, source="ours"))
+                    single_valid_std=None, coverage_std=None,
+                    coverage_paper_unknown_N=None, source="ours"))
     return rows + out
 
 
@@ -399,6 +442,81 @@ def build_unified(pattern=RESULTS):
 
 
 # ---------------------------------------------------------------------------
+# [3] 두 번째 표 -- 해 개수 분포와 coverage 상한
+#
+# coverage 는 "그 퍼즐 해집합의 몇 %를 발견했나" 이므로 분모가 퍼즐마다 다르다.
+# 해가 k 개인 퍼즐의 N-표본 상한은 min(N,k)/k 이고, 이 분포가 곧 coverage 의 천장이다.
+# 8×8 은 64%가 해 1개라 N=1 천장이 0.7909 로 막혀 논문값(0.884~0.922)이 원리적으로
+# 불가능하다 -- REPORT_FINAL §1.4 의 근거가 이 표다.
+# ---------------------------------------------------------------------------
+
+# wandb.Table 은 열 타입이 섞이면 거부한다. 그래서 요약 행을 n_solutions="ALL" 로 쓰지 않고
+# scope 열로 가르고 n_solutions 는 숫자(요약 행은 None)로 유지한다.
+DIST_COLS = ["task", "split", "scope", "n_solutions", "n_puzzles", "frac",
+             "ub_at_1", "ub_at_5", "ub_at_10", "ub_at_20"]
+DIST_NS = (1, 5, 10, 20)
+
+
+def _dist_from_covcurve(task, pattern):
+    """covcurve*.json 의 by_total 에서 (해 개수 -> 퍼즐 수). 여러 파일이면 최다 퍼즐 기준."""
+    best = None
+    for f in sorted(glob.glob(pattern)):
+        try:
+            d = json.load(open(f))
+        except Exception:
+            continue
+        bt = d.get("by_total")
+        if not isinstance(bt, dict):
+            continue
+        cnt = {int(k): v["n_puzzles"] for k, v in bt.items()}
+        if best is None or sum(cnt.values()) > sum(best.values()):
+            best = cnt
+    return best or {}
+
+
+def _dist_from_gc_sidecar(path="data/graph-coloring-8/sidecar_gc_8.json", split="test"):
+    """GC 는 covcurve 산출물이 없어 sidecar 에서 직접 센다."""
+    if not os.path.exists(path):
+        return {}
+    try:
+        g = (json.load(open(path)) or {}).get("graphs", {})
+    except Exception:
+        return {}
+    cnt = defaultdict(int)
+    for v in g.values():
+        if v.get("split") == split:
+            cnt[len(v.get("colorings", []))] += 1
+    return dict(cnt)
+
+
+def build_distribution():
+    dists = {
+        "nq8": _dist_from_covcurve("nq8", "experiments/results/covcurve8_*.json"),
+        "nq10": _dist_from_covcurve("nq10", "experiments/results/covcurve_nq10_*.json"),
+        "gc8": _dist_from_gc_sidecar(),
+    }
+    rows, summary = [], {}
+    for task, cnt in dists.items():
+        n = sum(cnt.values())
+        if not n:
+            continue
+        ub_tot = {N: 0.0 for N in DIST_NS}
+        for k in sorted(cnt):
+            m = cnt[k]
+            ubs = {N: min(N, k) / k for N in DIST_NS}
+            for N in DIST_NS:
+                ub_tot[N] += m * ubs[N]
+            rows.append([task, "test", "bucket", k, m, m / n] + [ubs[N] for N in DIST_NS])
+        summary[task] = dict(n_puzzles=n, frac1=cnt.get(1, 0) / n,
+                             ub={N: ub_tot[N] / n for N in DIST_NS})
+    # 전체 요약 행: scope="ALL", frac 열은 "해 1개 비율", ub_* 는 퍼즐평균 상한
+    for task, sm in summary.items():
+        rows.append([task, "test", "ALL", None, sm["n_puzzles"], sm["frac1"]]
+                    + [sm["ub"][N] for N in DIST_NS])
+    return DIST_COLS, rows, summary
+
+
+# ---------------------------------------------------------------------------
 # 패널 (Panel A / F / G)
 #
 # 축 규약을 캡션에 박는다 -- 가중치(EMA|live) x 집계(단일시도=pass@1) x step_kind(peak|final).
@@ -408,6 +526,14 @@ def build_unified(pattern=RESULTS):
 
 SURFACE, INK, INK2 = "#fcfcfb", "#0b0b0b", "#52514e"
 C1, C2, C3 = "#2a78d6", "#eb6834", "#1baf7a"      # 검증 통과 (validate_palette.js)
+C4 = "#eda100"
+N_COLORS = {1: C1, 5: C2, 10: C3, 20: C4}       # N 별 고정 색 (순환 금지)
+# 논문 Fig 15 버킷
+BUCKETS = [("1", lambda k: k == 1), ("2-5", lambda k: 2 <= k <= 5),
+           ("6-20", lambda k: 6 <= k <= 20), ("21+", lambda k: k >= 21)]
+PAPER_COV = {"nq8": 0.903, "nq10": 0.575, "gc8": 0.858}
+COVCURVE_PICK = {"nq8": "experiments/results/covcurve8_nq8_v2_base_b500_s0.json",
+                 "nq10": "experiments/results/covcurve_nq10_on_b520_s1.json"}
 
 
 def _style(ax):
@@ -483,6 +609,90 @@ def build_panels(cols, data):
         return rows[0][ci[col]] if rows else None
 
     figs = {}
+
+    # ---- Panel E : coverage vs 해 개수 (실측 실선 + 각 N 상한 점선 + 논문 수평선) ----
+    # 논문 Fig 15 버킷 {1, 2-5, 6-20, 21+} 으로 묶는다. 버킷 안에서는 퍼즐 수로 가중평균.
+    def bucketize(path):
+        d = json.load(open(path))
+        bt = {int(k): v for k, v in d["by_total"].items()}
+        out = {}
+        for label, pred in BUCKETS:
+            ks = [k for k in bt if pred(k)]
+            n = sum(bt[k]["n_puzzles"] for k in ks)
+            if not n:
+                out[label] = None
+                continue
+            out[label] = dict(
+                n=n,
+                cov={N: sum(bt[k]["n_puzzles"] * bt[k]["coverage"][str(N)] for k in ks) / n
+                     for N in DIST_NS},
+                ub={N: sum(bt[k]["n_puzzles"] * bt[k]["upper_bound"][str(N)] for k in ks) / n
+                    for N in DIST_NS})
+        return d["checkpoint"], out
+
+    avail = {t: p for t, p in COVCURVE_PICK.items() if os.path.exists(p)}
+    if avail:
+        fig, axes = plt.subplots(1, len(avail), figsize=(6.2 * len(avail), 4.6),
+                                 facecolor=SURFACE, squeeze=False)
+        for ax, (task, path) in zip(axes[0], sorted(avail.items())):
+            ck, b = bucketize(path)
+            labels = [l for l, _ in BUCKETS if b.get(l)]
+            xs = list(range(len(labels)))
+            for N in DIST_NS:
+                ax.plot(xs, [b[l]["cov"][N] for l in labels], "-o", color=N_COLORS[N],
+                        lw=2, ms=5, label=f"N={N} measured", zorder=3)
+                ax.plot(xs, [b[l]["ub"][N] for l in labels], "--", color=N_COLORS[N],
+                        lw=1.4, alpha=0.75, label=f"N={N} ceiling", zorder=2)
+            ax.axhline(PAPER_COV[task], color=INK2, lw=1.4, ls=":", zorder=4)
+            ax.annotate(f"paper {PAPER_COV[task]:.3f}", (len(labels) - 1, PAPER_COV[task]),
+                        textcoords="offset points", xytext=(-4, 5), ha="right",
+                        fontsize=8, color=INK2)
+            ax.set_xticks(xs)
+            ax.set_xticklabels([f"{l}\n(n={b[l]['n']})" for l in labels], color=INK, fontsize=9)
+            ax.set_ylim(0, 1.08)
+            _style(ax)
+            ax.set_title(f"{task} — {ck.split('/')[-2]} / {ck.split('/')[-1]}",
+                         color=INK, fontsize=9.5, loc="left")
+            ax.set_xlabel("solutions per puzzle (paper Fig 15 buckets)", color=INK2, fontsize=9)
+        axes[0][0].legend(frameon=False, fontsize=7.5, labelcolor=INK2, ncol=2, loc="lower left")
+        fig.suptitle("Panel E - coverage vs solutions per puzzle. solid = measured, "
+                     "dashed = ceiling min(N,k)/k, dotted = paper",
+                     color=INK, fontsize=10, x=0.01, ha="left")
+        fig.tight_layout(rect=[0, 0, 1, 0.93])
+        figs["E_coverage_by_solutions"] = fig
+
+    # ---- Panel H : 해 개수 분포 (coverage 천장의 원인) ----
+    _, drows, dsum = build_distribution()
+    tasks_h = [t for t in ("nq8", "nq10", "gc8") if t in dsum]
+    if tasks_h:
+        fig, axes = plt.subplots(1, len(tasks_h), figsize=(4.4 * len(tasks_h), 4.2),
+                                 facecolor=SURFACE, squeeze=False)
+        for ax, task in zip(axes[0], tasks_h):
+            per = {}
+            for r in drows:
+                if r[0] != task or r[2] != "bucket":
+                    continue
+                for label, pred in BUCKETS:
+                    if pred(int(r[3])):
+                        per[label] = per.get(label, 0) + r[4]
+            labels = [l for l, _ in BUCKETS if l in per]
+            vals = [per[l] for l in labels]
+            tot = sum(vals)
+            _bars(ax, labels, [("puzzles", vals, C1)], fmt="{:.0f}")
+            for x, v in enumerate(vals):
+                ax.annotate(f"{v/tot:.1%}", (x, v), textcoords="offset points",
+                            xytext=(0, 14), ha="center", fontsize=8, color=INK)
+            _style(ax)
+            ax.set_ylim(0, max(vals) * 1.25)
+            ax.get_legend().remove() if ax.get_legend() else None
+            ax.set_title(f"{task}: {dsum[task]['n_puzzles']} puzzles, "
+                         f"1-solution {dsum[task]['frac1']:.1%}\n"
+                         f"ceiling N=1 {dsum[task]['ub'][1]:.4f}",
+                         color=INK, fontsize=9.5, loc="left")
+        fig.suptitle("Panel H - solutions-per-puzzle distribution: this is what caps coverage",
+                     color=INK, fontsize=10, x=0.01, ha="left")
+        fig.tight_layout(rect=[0, 0, 1, 0.90])
+        figs["H_solution_count_dist"] = fig
 
     # ---- Panel A : ours(peak) vs ours(final) vs paper.  conflict 는 A2 로 분리 ----
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.2), facecolor=SURFACE,
@@ -623,6 +833,12 @@ def main():
             run = wandb.init(project=args.summary_project, name="unified-summary",
                              job_type="summary", reinit=True)
             run.log({"summary/all": wandb.Table(columns=cols, data=data)})
+            dcols, drows, dsum = build_distribution()
+            run.log({"summary/solution_distribution": wandb.Table(columns=dcols, data=drows)})
+            print(f"  두 번째 표: 해 개수 분포 {len(drows)}행 x {len(dcols)}열")
+            for t, sm in sorted(dsum.items()):
+                print(f"    {t}: {sm['n_puzzles']} 퍼즐, 해1개 {sm['frac1']:.2%}, "
+                      + " / ".join(f"ub@{N}={v:.4f}" for N, v in sm['ub'].items()))
             for name, fig in panels.items():
                 run.log({f"panel/{name}": wandb.Image(fig)})
             art = wandb.Artifact("gram-unified-summary", type="summary")

@@ -121,12 +121,19 @@ def main():
                                 y=["train/diag/sigma_prior_std_mean"],
                                 layout=wr.Layout(w=24, h=10))],
         ),
-        wr.H1(text="Panel A / F / G — 논문 대비 · 다양성 · 실패 3종"),
+        wr.H1(text="Panel A / E / H / F / G — 논문 대비 · coverage 축 · 다양성 · 실패 3종"),
         wr.MarkdownBlock(text=(
             "`GRAM-repro-summary` 의 통합 표(646행 × 27열, `server` 열로 29/50 구분)와 그 표에서 "
             "그린 막대 패널이다.\n\n"
-            "- **Panel A** ours(peak) / ours(final) / paper. GC conflict 는 스케일이 달라(0.02 vs 2.7) "
-            "별도 축 + log scale — 이중 y축은 쓰지 않았다.\n"
+            "- **Panel A** ours(peak) / ours(final) / paper. **coverage 막대는 넣지 않았다** — "
+            "coverage 는 N 에 강하게 의존해서(§1.4) 단일 막대로 그리면 축이 안 맞는 비교가 된다. "
+            "coverage 는 Panel E 로 본다. A 에는 Accuracy(nq8/nq10)와 GC conflict 만 남겼고, "
+            "conflict 는 스케일이 달라(0.02 vs 2.7) 별도 축 + log scale 이다 — 이중 y축은 쓰지 않았다.\n"
+            "- **Panel E** coverage vs 해 개수(논문 Fig 15 버킷). 실선=실측, 점선=그 N 의 천장 "
+            "`min(N,k)/k`, 점선(회색)=논문값. **N=1 에서 실측이 천장에 붙어 있다** — 모델이 아니라 "
+            "test 셋 해 개수 분포가 coverage 를 정한다.\n"
+            "- **Panel H** 해 개수 분포. 8×8 은 **64%가 해 1개**라 N=1 천장이 **0.7909** 로 막히고, "
+            "논문 구간(0.884~0.922)이 원리적으로 도달 불가다. 10×10 천장 0.5930, GC-8 0.4836.\n"
             "- **Panel F** distinct@20(1~20)과 valid(0~1)은 다른 축이라 분리했다. nq8 은 distinct "
             "1.65~2.79(거의 결정론)인데 valid 0.98, gc8 은 distinct 20.00 인데 valid 0.98 — "
             "**다양성과 정확도는 독립이다.**\n"
@@ -140,6 +147,10 @@ def main():
             panels=[
                 wr.MediaBrowser(media_keys=["panel/A_paper_vs_ours"],
                                 layout=wr.Layout(w=24, h=9)),
+                wr.MediaBrowser(media_keys=["panel/E_coverage_by_solutions"],
+                                layout=wr.Layout(w=24, h=9)),
+                wr.MediaBrowser(media_keys=["panel/H_solution_count_dist"],
+                                layout=wr.Layout(w=24, h=8)),
                 wr.MediaBrowser(media_keys=["panel/F_distinct_vs_valid"],
                                 layout=wr.Layout(w=12, h=8)),
                 wr.MediaBrowser(media_keys=["panel/G_prior_vs_posterior"],

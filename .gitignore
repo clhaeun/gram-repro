@@ -42,6 +42,9 @@ ENV/
 # --- 수동 백업 파일 (.bak_MMDD_HHMM 패턴) ---
 *.bak
 *.bak_*
+# 예외: archive/bak_originals/ 는 git 히스토리에 없는 **유일본** 스냅샷이다.
+# 이 규칙 때문에 지금까지 추적되지 않았고, 그래서 blob 대조에서 전멸로 나왔다.
+!archive/bak_originals/**
 *.orig
 *.rej
 *~
