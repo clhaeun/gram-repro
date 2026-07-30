@@ -487,6 +487,8 @@ coverage 는 N(표본 수)에 강하게 의존한다. 그래서 "우리가 논�
 | 4 | **GC 를 논문 축에 정확히 올리기** | `concat+nodecay/bias0/β0.5` seed 2/3/4 추가 → seed 5개 |
 | 5 | **재현성 자체가 안 된다** — 같은 seed 가 같은 궤적을 안 만든다(L2 55%) | `use_deterministic_algorithms` 등 결정성 설정 도입 검토 ([REPORT_audit_measure.md](reports/archive/REPORT_audit_measure.md)) |
 | 6 | forcehalt 격차의 β 의존성 (§3-4 한계) | β 축 3~4점 × forcehalt |
+| 7 | **논문 Figure 8 (L_ELBO) 재현 불가** — `L_ELBO` 를 학습 중 로깅하지 않아 곡선이 없다 | `pretrain.py` 에 로깅 추가 후 재학습해야 한다. 기존 run 으로는 소급 불가 |
+| 8 | **Table 1 baseline 7행 + GC 10-vertex 논문값 미확보** — 논문 PDF 가 로컬에 없고 리포트에도 GRAM 행만 있다 | 값을 받아 `reports/figures/table1_paper_vs_ours.{md,png}` 에 채운다 |
 
 ### 5.2 사수 질문
 
@@ -555,3 +557,26 @@ seed 4 대기(§5.1 항목 4).
 - **`beta_sum`/`beta_mean` 은 `kl_reduction` 키가 있는 run 만 채워진다.** 29번 구코드 run 은
   키가 없어 눈금 불명이고 두 열이 비어 있다(§2).
 - probe run 제외: `nd_off_cat_m4`, `nd_off_cat_m4_b`, `nd_yproj_on`, `nd_both_on`, `p100_*`, `probe_*`.
+
+---
+
+## 7. 논문 형식 산출물 (`reports/figures/`)
+
+`experiments/make_paper_figures.py` 로 만든다. **wandb 커스텀 차트를 쓰지 않는다** — 축 범위·범례
+통제가 안 돼서 축이 어긋난 그림이 나온 적이 있다. matplotlib PNG 를 git 에 커밋하고 wandb 에는
+이미지로만 올린다. **논문에 없는 요소는 넣지 않는다**(Figure 15 의 천장선을 뺀 이유).
+
+| 파일 | 내용 |
+|---|---|
+| `table1_paper_vs_ours.{md,png}` | 논문 Table 1 레이아웃. `GRAM (ours)` 행만 우리 측정, PNG 는 그 행만 배경 강조 |
+| `fig10_solution_distribution.png` | Figure 10 — 퍼즐당 해 개수 분포, 8×8 / 10×10 2패널 (train+test) |
+| `fig12_gc_coloring_distribution.png` | Figure 12 — GC 8-vertex 그래프당 컬러링 개수 분포 (10-vertex 미실시로 생략) |
+| `fig15_coverage_by_solutions.png` | Figure 15 — 해 개수별 coverage, N=1/5/10/20 (8×8 / 10×10) |
+
+**축 상한을 넘는 데이터는 자르지 않았다.** Figure 10 의 해-1개 카운트가 8×8 은 3,372(논문 y 상한
+3,000), 10×10 은 15,984(상한 15,000)로 둘 다 넘는다. 막대를 자르는 대신 y 를 늘리고 논문 상한
+위치에 `paper y-max` 점선을 넣었다. Figure 12 는 x 범위(논문 눈금 ≤19)를 벗어나는 그래프 61개를
+그림 안에 명시했다(최대 144 컬러링).
+
+**캡션 문구는 논문 원문과 글자 단위로 대조하지 못했다** — 논문 PDF 가 이 박스에 없다. 축
+눈금·범위는 지시받은 값을 그대로 썼고, 제목 형식만 논문 스타일로 맞췄다.
