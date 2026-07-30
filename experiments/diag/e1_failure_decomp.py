@@ -17,7 +17,8 @@ import os
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path[:0] = [os.path.dirname(_HERE), _HERE]   # repo root (pretrain), then experiments/
+# experiments/diag/ 로 내려왔다: repo root(pretrain), experiments/(gram_harness), 그리고 여기
+sys.path[:0] = [os.path.dirname(os.path.dirname(_HERE)), os.path.dirname(_HERE), _HERE]
 import gram_harness as H  # noqa: E402
 
 # TRM on the same 10k Sudoku-Extreme test subsample, k=16 (analyze_sudoku_tta.py).

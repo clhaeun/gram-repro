@@ -5,10 +5,11 @@ K=1 and reports per-bucket valid rate.  seq_len from data (no 81 hardcoding).
 """
 import argparse, json, os, sys
 import numpy as np, torch
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# experiments/diag/ 로 한 단계 내려왔으므로 repo root 는 부모의 부모의 부모다
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from experiments.gram_harness import load_model
 from evaluators.nqueens import verify_boards
-from experiments.diag_posterior_prior import run_path, load_test
+from experiments.diag.diag_posterior_prior import run_path, load_test
 import hashlib
 
 def ihash(row):

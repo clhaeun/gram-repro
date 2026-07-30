@@ -32,7 +32,8 @@ import sys
 import torch
 from omegaconf import OmegaConf
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# experiments/diag/ 로 한 단계 내려왔으므로 repo root 는 부모의 부모의 부모다
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import pretrain as P
 
 
