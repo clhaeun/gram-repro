@@ -1,0 +1,42 @@
+{
+  "checkpoint": "checkpoints/Nqueens-8-ACT-torch/nq8_on_b180/step_14807",
+  "n": 772,
+  "N": 20,
+  "seed": 1,
+  "sigma_scale": 1.0,
+  "tag": "nq8_on_b180 step_14807 seed1",
+  "prior_all_samples": {
+    "valid": 0.6275906735751295,
+    "consistent": 0.8988341968911917,
+    "strict": 0.5854274611398964,
+    "queen_count_mean": 7.964054404145077,
+    "queen_count_min": 4,
+    "queen_count_max": 13
+  },
+  "prior_single_k0": {
+    "valid": 0.6178756476683938,
+    "consistent": 0.8743523316062176,
+    "strict": 0.5582901554404145,
+    "queen_count_mean": 7.988341968911917,
+    "queen_count_min": 5,
+    "queen_count_max": 12
+  },
+  "posterior": {
+    "valid": 0.9831606217616581,
+    "consistent": 0.9948186528497409,
+    "strict": 0.9831606217616581,
+    "queen_count_mean": 7.993523316062176,
+    "queen_count_min": 6,
+    "queen_count_max": 9
+  },
+  "pass_at": {
+    "1": 0.6275906735751295,
+    "5": 0.9505989930059834,
+    "10": 0.9867941004839654,
+    "20": 0.9961139896373057
+  },
+  "majority_at_N_valid": 0.8562176165803109,
+  "verifier_selected_at_N_valid": 0.5505181347150259,
+  "distinct_at_N_mean": 6.910621761658031,
+  "puzzles_with_ge1_valid": 0.9961139896373057
+}
