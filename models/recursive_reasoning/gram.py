@@ -328,6 +328,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         return mu + eps * std
 
 
+    # z_H랑 y_emb를 옆으로 이어붙여서 만든 y_concat_proj(2D 차원)에 행렬 W를 곱해서 다시 D차원으로 축소시킨다
     def _inject_y(self, z_H, y_emb):
         """posterior 입력 u_y 를 만든다.  prior 는 이 함수를 쓰지 않는다.
 
@@ -337,6 +338,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         if self.config.y_inject == "concat":
             return self.y_concat_proj(torch.cat([z_H, y_emb], dim=-1))
         return z_H + y_emb
+
 
     @torch.no_grad()
     def _y_proj_deviation(self):
@@ -358,6 +360,8 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         dev[:, D:].diagonal().sub_(1.0)
         return dev.norm() / math.sqrt(2.0 * D)
 
+
+    # 학습 중간에 노이즈 상태가 어떤지
     @torch.no_grad()
     def _latent_diag(self, mu_p, logvar_p, mu_q, logvar_q, kl):
         """Scalar diagnostics for the final (grad-carrying) transition.
