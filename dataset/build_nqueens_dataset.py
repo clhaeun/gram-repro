@@ -4,8 +4,9 @@ The model gets a *partial* board (a subset of the queens of some complete
 solution) and must output a complete legal placement keeping every given queen.
 Tokens: 0 = PAD (unused), 1 = empty, 2 = queen.  ``seq_len = n * n``, row-major.
 
-Rows are grouped by unique input; the train/test split is over *groups*, so no
-input straddles the split.  Test keeps one row per input, train keeps all.
+The train/test split is over unique inputs (decided BEFORE pair expansion), so
+no input straddles the split.  Both splits keep every (input, solution) row —
+one row per consistent solution, and each row is its own group.
 
 ``sidecar_{n}.json`` maps each input hash to its split, clues, and the FULL set
 of solutions consistent with it -- ``experiments/eval_harness.py`` (coverage@K)
@@ -149,11 +150,14 @@ def convert_subset(set_name: str, keys, sols, key_to_clues, rows_by_key, config:
         for r, c in key_to_clues[h]:
             inp[r * n + c] = 1
 
-        # One row per consistent solution; test keeps only the first
-        # solution indexes: 각 hash에 대해 똑같은 문제를 여러 번 풀지 않도록 1개(해시: [label 1])만 남김 - dataloader는 일단 (문제, 정답) 형태로 처리, 출력
+        # One row per consistent solution, in BOTH splits (no test truncation).
+        # 왜: 해가 k개인 입력은 k행(같은 입력, 서로 다른 라벨)으로 저장한다.  GRAM 은
+        # 같은 입력에 여러 정답이 오는 것을 posterior/prior 로 모델링하는 구조인데,
+        # 입력당 1라벨이면 그 신호가 학습에 존재하지 않는다.  다해 입력일수록 행이
+        # 많이 소실되어(해 93개 입력이면 92행) train 에서 실효 비중이 눌린다.
+        # GC 빌더는 처음부터 이 확장을 하고 있다(그래프당 색칠 평균 4.82개).
+        # sols 는 정렬된 해 목록이고 sidxs 도 정렬 — 행 순서는 결정론적이다.
         sidxs = sorted(rows_by_key[h])
-        if set_name == "test":
-            sidxs = sidxs[:1]
 
         # test/train에 해당하는 hash만 뽑아옴
         for si in sidxs:
@@ -169,9 +173,11 @@ def convert_subset(set_name: str, keys, sols, key_to_clues, rows_by_key, config:
 
             results["puzzle_indices"].append(example_id)
             results["puzzle_identifiers"].append(0)
-
-        # Push group
-        results["group_indices"].append(puzzle_id)
+            # 행 하나 = group 하나 (사수님 로그 "Saved train: 107494 groups, 107494
+            # puzzles" 기준).  group 을 입력 단위로 두면 epoch 당 입력마다 해 1개만
+            # 샘플되어 1 epoch = unique 입력 수가 되고, 행 단위면 매 epoch 모든
+            # (입력, 해) 행을 본다 — step 수 계산(groups/batch)이 여기 걸려 있다.
+            results["group_indices"].append(puzzle_id)
 
     # To Numpy, shifting raw {0, 1} to tokens {1, 2} so PAD id 0 stays unused
     # 0/1 -> 1/2로.

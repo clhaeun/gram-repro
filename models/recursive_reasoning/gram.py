@@ -50,7 +50,30 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     pos_encodings: str
 
     rms_norm_eps: float = 1e-5
-    rope_theta: float = 10000.0
+    rope_theta: float = 10000.
+    
+
+    # config - looped transformer
+    # --- FPRM 기여1: pre-norm + residual scaling (fp_transformer) ----------
+    # False = 기존 ReasoningModule 경로 그대로. 기존 yaml/checkpoint 무영향.
+    use_fp_transformer: bool = False
+    norm_type: str = "pre-norm"               # 'pre-norm'|'post-norm'|'peri-norm'
+    residual_scale: Optional[str] = "fixed"   # None|'fixed'|'input-independent'|'input-dependent'
+    alpha_1_init: float = 0.75                # FPRM Table 4 (Sudoku)
+    alpha_2_init: float = 0.25                # FPRM Table 4 (Sudoku)
+    outer_only: bool = False                  # True = Eq3 만 (α1=β1=1)
+    norm_placement: str = "none"              # 'input'|'output'|'none' / FPRM default 미확인
+    normalize_input_injection: bool = False   # FPRM default 미확인
+    conv_type: str = "none"                   # 기여1만 이식 → conv off
+    conv_kernel_size: int = 3                 # off 여도 __init__ 이 읽음
+    conv_bias: bool = False
+    causal: bool = False                      # pretrain.py 가 이미 주입 중, 필드 선언만 필요
+    softmax_temp: float = 1.0
+    use_spec_norm_linear: bool = False
+    weight_dropout: float = 0.0
+
+    
+    
     
     # Halting Q-learning config
     halt_max_steps: int
@@ -214,7 +237,15 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
         # Reasoning Layers
         self.L_level = TinyRecursiveReasoningModel_ACTV1ReasoningModule(layers=[TinyRecursiveReasoningModel_ACTV1Block(self.config) for _i in range(self.config.L_layers)])
-
+        """
+        # Reasoning Layers
+        if self.config.use_fp_transformer:
+            from models.fp_transformer import FixedPointTransformer
+            self.L_level = FixedPointTransformer(self.config, self.config.L_layers)
+        else:
+            self.L_level = TinyRecursiveReasoningModel_ACTV1ReasoningModule(layers=[TinyRecursiveReasoningModel_ACTV1Block(self.config) for _i in range(self.config.L_layers)])
+        """
+        
         # Initial states
         self.H_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
         self.L_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
