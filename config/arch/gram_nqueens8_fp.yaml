@@ -54,8 +54,8 @@ alpha_1_init: 0.75
 alpha_2_init: 0.25
 outer_only: false
 conv_type: none
-norm_placement: none            # FPRM default 미확인 -- '추가 개입 없음' 보수 선택
-normalize_input_injection: false  # FPRM default 미확인 -- 동일
+norm_placement: none            # FPRM Appendix Table 6 확인값 (FPRM/Looped Transformer 모두 none)
+normalize_input_injection: false  # 코드 전용 knob, 논문 미언급 -- false 유지
 conv_kernel_size: 3
 conv_bias: false
 softmax_temp: 1.0
@@ -63,3 +63,15 @@ use_spec_norm_linear: false
 weight_dropout: 0.0
 # causal 은 여기 쓰지 마라: pretrain.py create_model 이 causal=False 를 직접 주입해서
 # yaml 에도 있으면 dict() 중복 키워드로 즉사한다 (seq_len/vocab_size 와 같은 부류).
+#
+# lr/wd 근거 (run config 쪽 값이지만 여기 기록):
+#   FPRM Table 4 Sudoku      lr 1e-3 / wd 1e-3  α 0.75,0.25  AdamW
+#        Table 5 Maze        lr 1e-4 / wd 1.0   α 0.75,0.25  Adam-Atan2
+#        Table 6 state-track lr 1e-3 / wd 1e-2  α 0.5,0.5    Adam-Atan2
+#        Table 7 ARC         lr 1e-3 / wd 1e-2  α 0.75,0.25  Adam-Atan2
+# wd 를 내리는 것은 pre-norm 의 요구사항이 아니다 -- Maze 가 TRM 과 동일한
+# lr 1e-4 / wd 1.0 에서 pre-norm + residual scaling 을 쓴다. task 별 튜닝일 뿐.
+# A2 arm 이 Table 4 값(1e-3/1e-3)을 쓰는 근거는 "우리 task 가 Sudoku 이므로
+# Table 4 를 따름" 이고, A3' arm(1e-4/1.0)은 Maze 선례 + 기존 확립 사실(전부
+# wd=1.0 전제)과의 비교 축 유지다.  α init 도 task 의존(state-tracking 만
+# 0.5/0.5) -- 우리는 0.75/0.25 유지.

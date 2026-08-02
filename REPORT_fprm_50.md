@@ -53,21 +53,79 @@
 hydra compose 실로드: 두 arch 모두 use_fp_transformer=True, norm_type=pre-norm,
 residual_scale=fixed, α=0.75/0.25, norm_placement=none, normalize_input_injection=False.
 
-## 3. [8] 미확정 2건 (사수 확인 대기)
+## 3. [8] 논문 대조 결과 (사수 PDF 확인 회신 반영, 2026-08-02)
 
-- `norm_placement: none`, `normalize_input_injection: false` 는 **FPRM 논문 default
-  미확인** 상태다. "추가 개입 없음"이 보수적이라는 판단이지 논문 확인값이 아니다.
-- 웹/공개 repo 참조는 사수 지시로 하지 않는다 (추정 참조는 오염). 논문 PDF 는 사수가
-  보유 — 확인값 회신 시 yaml 두 곳 + 이 절을 갱신한다.
+- `norm_placement: none` — **FPRM Appendix Table 6 확인값** (FPRM/Looped Transformer
+  모두 none). 미확인 → 확인으로 승격, yaml 주석 갱신 완료.
+- `normalize_input_injection: false` — **코드 전용 knob, 논문 전문에 서술 없음.
+  false 유지.** yaml 주석 갱신 완료.
+- 웹/공개 repo 참조는 하지 않았고 하지 않는다 (추정 참조는 오염).
 
-## 4. [10] watcher 오판 정정
+### 3-2. [8-2] lr/wd 근거 정정
 
-watch_final_50.sh 가 최종 checkpoint 를 total_steps(67,443/58,778)로 기다렸으나
-실제 저장은 eval 경계(36×1,873=**67,428** / 14×4,198=**58,772**)다.
-- 오판·건너뜀 발생: **nq8_final_add_s0, nq8_final_add_s1** 2건 (실제로는 정상 완주,
-  wandb Synced 확인). → step 정정 후 watcher 재시작, 최종 step harness 자동 재개.
-- nq10 6런: 오판 시점에 전부 학습 중이어서 **건너뛴 run 없음**. 정정된 58,772 로 감시 중.
-- 정점 harness: EMA 정점은 두 런 모두 최종 step 과 동일(67,428)이라 별도 측정 불요.
+"pre-norm 이라서 wd 를 내려야 한다"는 **틀렸다**. FPRM 표 전개:
+
+| | lr | wd | α init | optimizer |
+|---|---|---|---|---|
+| Table 4 Sudoku | 1e-3 | 1e-3 | 0.75, 0.25 | AdamW |
+| Table 5 Maze | 1e-4 | 1.0 | 0.75, 0.25 | Adam-Atan2 |
+| Table 6 state-track | 1e-3 | 1e-2 | 0.5, 0.5 | Adam-Atan2 |
+| Table 7 ARC | 1e-3 | 1e-2 | 0.75, 0.25 | Adam-Atan2 |
+
+Maze 가 TRM 과 동일한 lr 1e-4 / wd 1.0 에서 pre-norm + residual scaling 을 쓴다 —
+wd 인하는 pre-norm 의 요구사항이 아니라 task 별 튜닝이다. Table 4 값을 쓰는 arm 의
+근거는 "우리 task 가 Sudoku 이므로 Table 4 를 따름"으로 정정. α init 도 task 의존
+(state-tracking 만 0.5/0.5) — 우리는 0.75/0.25 유지. 두 yaml 주석에 표와 함께 기록.
+
+### 3-3. [8-3] A3′ arm — run config 두 벌 (`train_nqueens8_fp.sh`)
+
+새 arch yaml 없음 (arch 는 A2 와 동일한 gram_nqueens8_fp). 런처 하나에 ARM 필수
+인자로 두 run config 를 담았다 (ARM 미지정 시 즉시 중단 — 잘못된 arm 무음 launch 방지):
+
+| arm | lr | wd | 근거 |
+|---|---|---|---|
+| `ARM=A2` | 1e-3 | 1e-3 | FPRM Table 4 (우리 task 가 Sudoku 계열) |
+| `ARM=A3p` (A3′) | 1e-4 | 1.0 | Maze 선례 + 기존 확립 사실(전부 wd=1.0 전제)과의 비교 축. A0(기존 L_level, 동일 lr/wd)와 L_level 하나만 달라 pre-norm 단독 효과 직접 측정 |
+
+DRYRUN 조립 확인: A2 → lr=1e-3 weight_decay=1e-3 (puzzle_emb 동일), A3p → lr=1e-4
+weight_decay=1.0. puzzle_emb_lr/wd 는 repo 관례대로 본체 추종. **학습 launch 안 함.**
+
+## 4. [10] watcher 오판 정정 + step 계산식
+
+### step 번호의 출처와 off-by-N 의 원인 (개별 정정이 아니라 계산식 확정)
+
+- 내가 watcher 에 넣은 67,443/58,778 은 **하드코딩**이었고, 출처는 pretrain.py:279
+  `total_steps = int(epochs × total_groups / global_batch_size)` 다.
+- 실제 최종 step 이 그보다 작은 이유: `puzzle_dataset.py:226-227` `_iter_train` 이
+  iter(=eval_interval epochs 단위)마다 batch 를 뽑다가 **마지막 미달 배치를 버린다**
+  ("Drop last batch"). 따라서
+
+  **final = (epochs // eval_interval) × floor(eval_interval × total_groups / global_batch_size)**
+
+- 4개 anchor 전수 검산 (전부 일치):
+  | run | 식 | 결과 | 실측 |
+  |---|---|---|---|
+  | nq8_final (7200ep/200) | 36 × floor(200×7,194/768=1873.4) | 67,428 | 67,428 ✓ |
+  | nq10_final (420ep/30) | 14 × floor(30×107,480/768=4198.4) | 58,772 | 58,772 ✓ |
+  | nq10_v7 (2010ep/30, 구데이터) | 67 × floor(30×36,907/768=1441.7) | 96,547 | 96,547 ✓ |
+  | nq8_v5/v6 (12000ep/200, 구데이터) | 60 × floor(200×4,376/768=1139.6) | 68,340 | 68,340 ✓ |
+
+- 재발 방지: `/workspace/home/chaeun/calc_final_step.sh` — run 의 all_config.yaml +
+  data 의 train/dataset.json 에서 위 식으로 계산 (하드코딩 금지). ★단 data_paths 의
+  "현재" dataset.json 을 읽으므로 run 이후 데이터가 재빌드된 과거 run 에는 못 쓴다
+  (v7 을 지금 돌리면 pair 데이터 groups 로 281,266 이 나온다 — launch 직후 걸 때 쓰는 용도).
+
+### 오판으로 harness 를 건너뛴 run 전수 목록
+
+| run | 오판 시각 | 실제 상태 | 조치 |
+|---|---|---|---|
+| nq8_final_add_s0 | 08-02 13:20 | step_67428 정상 완주 (wandb Synced) | 정정 후 최종 step harness 4건 완료 |
+| nq8_final_add_s1 | 08-02 13:20 | step_67428 정상 완주 (wandb Synced) | 동일 |
+
+이상 **2건이 전부**다. nq10 6런은 오판 시점에 전부 학습 중이었고, 정정된 58,772 기준
+watcher 가 add_s0/s1·catnd_s0/s1 완주분 harness 를 진행 중 (add_s2/catnd_s2 는 학습 중).
+
+- 정점 harness: EMA 정점은 두 nq8 런 모두 최종 step 과 동일(67,428)이라 별도 측정 불요.
   raw 정점은 s0=step 29,968(0.9890), s1=step 59,936(0.9890) → {EMA,.live}×hs{0,1}
   8건을 최종 step harness 종료 후 자동 실행하도록 큐(queue_nq8_peaks.sh) 가동.
 
