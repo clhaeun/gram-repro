@@ -1,0 +1,53 @@
+# gram.yaml(Sudoku 정준 arch) 의 사본 + FPRM 기여1(pre-norm + residual scaling) 활성.
+# 기존 gram.yaml 은 손대지 않는다.  FPRM 블록 외에는 gram.yaml 과 글자 그대로 동일.
+name: recursive_reasoning.gram@TinyRecursiveReasoningModel_ACTV1
+loss:
+  name: losses@ACTLossHead
+  loss_type: stablemax_cross_entropy
+
+halt_exploration_prob: 0.1
+halt_max_steps: 16
+
+H_cycles: 3
+L_cycles: 6
+
+H_layers: 0
+L_layers: 2
+
+hidden_size: 512
+num_heads: 8  # min(2, hidden_size // 64)
+expansion: 4
+
+puzzle_emb_ndim: ${.hidden_size}
+
+pos_encodings: rope
+forward_dtype: bfloat16
+
+mlp_t: False
+puzzle_emb_len: 16
+no_ACT_continue: True
+
+# GRAM용 -- 정준 설정 유지 (kl_reduction sum)
+kl_coef: 0.1        # KL 가중치
+kl_balance: 0.8     # KL balancing 비율
+kl_reduction: sum   # L축 reduction. halt_only(71.85%)=sum, lmean_v2(1.8%)=mean
+lprm_coef: 1.0      # 일단 1로 둠
+
+# ---- FPRM 기여1 (use_fp_transformer 외 나머지는 dataclass default 가 이미 활성값이지만
+#      사후 추적을 위해 전부 명시한다) --------------------------------------------
+use_fp_transformer: true
+norm_type: pre-norm
+residual_scale: fixed
+alpha_1_init: 0.75
+alpha_2_init: 0.25
+outer_only: false
+conv_type: none
+norm_placement: none              # FPRM default 미확인 -- '추가 개입 없음' 보수 선택
+normalize_input_injection: false  # FPRM default 미확인 -- 동일
+conv_kernel_size: 3
+conv_bias: false
+softmax_temp: 1.0
+use_spec_norm_linear: false
+weight_dropout: 0.0
+# causal 은 여기 쓰지 마라: pretrain.py create_model 이 causal=False 를 직접 주입해서
+# yaml 에도 있으면 dict() 중복 키워드로 즉사한다 (seq_len/vocab_size 와 같은 부류).

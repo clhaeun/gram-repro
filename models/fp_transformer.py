@@ -6,8 +6,6 @@ import math
 
 from .fp_layers import rms_norm, CastedLinear, SpecNormalizedLinear, Attention, SwiGLU
 
-# from .config import ReasoningModelConfig
-
 CosSin = Tuple[torch.Tensor, torch.Tensor]
 
 '''
@@ -20,7 +18,7 @@ CosSin = Tuple[torch.Tensor, torch.Tensor]
 
     
 class FixedPointTransformerBlock(nn.Module):
-    def __init__(self, config: ReasoningModelConfig) -> None:
+    def __init__(self, config) -> None:
         super().__init__()
 
         self.config = config

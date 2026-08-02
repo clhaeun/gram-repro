@@ -92,6 +92,10 @@ class PretrainConfig(pydantic.BaseModel):
     # 빼면 그 run 들과 비교 축이 어긋난다.  독립적으로 켤 수 있어야 한다.
     nodecay_y_proj: bool = False        # y_concat_proj.weight
     nodecay_logvar_bias: bool = False   # prior_logvar_bias, post_logvar_bias
+    # FPRM 모듈이 파라미터에 `_no_weight_decay` 속성으로 wd 예외를 표시한다
+    # (fp_transformer 의 input-independent α 등).  이름 기반 targets 와 독립적으로,
+    # 그 마킹을 존중할지 여부.  기본 False = 현행과 bit-identical.
+    nodecay_marked: bool = False
 
 @dataclass
 class TrainState:
@@ -142,12 +146,14 @@ def _adamw_param_arg(model: nn.Module, config: PretrainConfig):
         targets.append("y_concat_proj.weight")
     if config.nodecay_logvar_bias:
         targets += ["prior_logvar_bias", "post_logvar_bias"]
-    if not targets:
+    if not targets and not config.nodecay_marked:
         return model.parameters()
 
     decay, nodecay, hit = [], [], []
     for name, param in model.named_parameters():
-        if any(name.endswith(t) for t in targets):
+        by_name = any(name.endswith(t) for t in targets)
+        by_attr = config.nodecay_marked and getattr(param, "_no_weight_decay", False)
+        if by_name or by_attr:
             nodecay.append(param)
             hit.append(name)
         else:
@@ -160,6 +166,11 @@ def _adamw_param_arg(model: nn.Module, config: PretrainConfig):
                 f"nodecay 대상 {t!r} 이 모델에 없다. "
                 f"(y_inject={getattr(config.arch, 'y_inject', None)!r} 인데 "
                 f"nodecay_y_proj 를 켠 것은 아닌지 확인해라)")
+
+    # 마킹 모드도 같은 원칙: 켜 놓고 하나도 안 걸리면 조용히 현행 동작이 되므로 죽인다.
+    if config.nodecay_marked and not any(
+            getattr(p, "_no_weight_decay", False) for p in nodecay):
+        raise ValueError("nodecay_marked 를 켰는데 _no_weight_decay 파라미터가 없다")
 
     print(f"[nodecay] weight_decay=0 대상 {len(nodecay)}개: {hit}", flush=True)
     return [

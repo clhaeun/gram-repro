@@ -236,16 +236,14 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             pass
 
         # Reasoning Layers
-        self.L_level = TinyRecursiveReasoningModel_ACTV1ReasoningModule(layers=[TinyRecursiveReasoningModel_ACTV1Block(self.config) for _i in range(self.config.L_layers)])
-        """
-        # Reasoning Layers
+        # FPRM 기여1: use_fp_transformer=True 면 pre-norm + residual scaling 블록으로 교체.
+        # import 는 분기 안에 둔다 -- False 인 기존 run 이 fp_* 파일 상태와 무관하게 돌아야 한다.
         if self.config.use_fp_transformer:
             from models.fp_transformer import FixedPointTransformer
             self.L_level = FixedPointTransformer(self.config, self.config.L_layers)
         else:
             self.L_level = TinyRecursiveReasoningModel_ACTV1ReasoningModule(layers=[TinyRecursiveReasoningModel_ACTV1Block(self.config) for _i in range(self.config.L_layers)])
-        """
-        
+
         # Initial states
         self.H_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
         self.L_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
@@ -394,7 +392,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
     # 학습 중간에 노이즈 상태가 어떤지
     @torch.no_grad()
-    def _latent_diag(self, mu_p, logvar_p, mu_q, logvar_q, kl):
+    def _latent_diag(self, mu_p, logvar_p, mu_q, logvar_q, kl, z_H=None, z_L=None):
         """Scalar diagnostics for the final (grad-carrying) transition.
 
         Everything is detached and derived from tensors the forward pass has
@@ -414,6 +412,13 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
         _std_stats(logvar_p, "prior")
         out["diag/mu_p_norm"] = mu_p.detach().float().norm(dim=-1).mean()
+
+        # FPRM Figure 2b 재현용: 최종 transition 의 ‖z_H‖ (배치·시퀀스 평균).
+        # boundedness 가 1차 판정 지표 -- accuracy 보다 먼저 본다.
+        if z_H is not None:
+            out["diag/z_h_norm"] = z_H.detach().float().norm(dim=-1).mean()
+        if z_L is not None:
+            out["diag/z_l_norm"] = z_L.detach().float().norm(dim=-1).mean()
 
         if logvar_q is not None:
             _std_stats(logvar_q, "post")
@@ -520,7 +525,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             kl = None
 
         # Logging-only; posterior path (= training) only, so eval stays untouched.
-        diag = self._latent_diag(mu_p, logvar_p, mu_q, logvar_q, kl) if use_posterior else None
+        diag = self._latent_diag(mu_p, logvar_p, mu_q, logvar_q, kl, z_H=z_H, z_L=z_L) if use_posterior else None
 
         z_H = z_H + eps
         lrpm_z.append(z_H[:, 0])
