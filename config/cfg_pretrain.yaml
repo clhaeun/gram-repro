@@ -46,3 +46,6 @@ freeze_weights: False # If True, freeze weights and only learn the embeddings
 # hydra 가 struct 모드라 여기에 없으면 override 자체가 거부된다.
 nodecay_y_proj: False      # y_concat_proj.weight 를 weight_decay=0 group 으로
 nodecay_logvar_bias: False # prior/post_logvar_bias 를 weight_decay=0 group 으로
+nodecay_marked: False      # FPRM 이 `_no_weight_decay` 로 마킹한 파라미터를 wd=0 group 으로.
+                           # pretrain.py:98 에 필드는 있었는데 여기 없어서 hydra struct 가
+                           # `nodecay_marked=...` 오버라이드를 거부했다(2026-08-03 29번 추가).

@@ -137,20 +137,26 @@ def main():
         chk(m["num_puzzle_identifiers"] == 1 and m["mean_puzzle_examples"] == 1,
             f"[4] {sp}: num_puzzle_identifiers=1, mean_puzzle_examples=1")
 
-    # --- one group == one unique input -------------------------------------
+    # --- one group == one row (사수님 "107494 groups, 107494 puzzles" 규율) ----
     for sp in ("train", "test"):
         gi, x = D[sp]["group_indices"], D[sp]["inputs"]
-        chk(all((x[gi[g]:gi[g + 1]] == x[gi[g]]).all() for g in range(len(gi) - 1)),
-            f"[5] {sp}: input identical within each group")
-        gh = [board_hash(x[gi[g]]) for g in range(len(gi) - 1)]
-        chk(len(set(gh)) == len(gh), f"[5] {sp}: groups are distinct inputs")
-        D[sp]["ghash"] = gh
+        chk(np.array_equal(gi, np.arange(len(x) + 1)), f"[5] {sp}: group_indices == arange(N+1) (행 1개 = group 1개)")
+        D[sp]["ghash"] = [board_hash(v) for v in x]
 
-    # --- row policy: test 1 row per input, train keeps every solution -------
-    chk(np.all(np.diff(D["test"]["group_indices"]) == 1), "[6] test: exactly one row per input")
-    gsz, tr_h = np.diff(D["train"]["group_indices"]), D["train"]["ghash"]
-    chk(all(int(gsz[g]) == len(indep[tr_h[g]]) for g in range(len(tr_h))),
-        "[6] train: group size == that input's full solution count")
+    # --- row policy: 두 split 모두 (입력, 해) 쌍 전량 -------------------------
+    for sp in ("train", "test"):
+        cnt = {}
+        for h in D[sp]["ghash"]:
+            cnt[h] = cnt.get(h, 0) + 1
+        bad = [h for h, c in cnt.items() if c != len(indep[h])]
+        chk(not bad, f"[6] {sp}: 입력별 행 수 == 그 입력의 전체 해 개수 (불일치 {len(bad)})")
+        # 같은 (입력, 라벨) 쌍이 두 번 나오면 안 된다
+        y = D[sp]["labels"]
+        pairs = {(h, y[i].tobytes()) for i, h in enumerate(D[sp]["ghash"])}
+        chk(len(pairs) == len(y), f"[6] {sp}: 중복 (입력, 라벨) 행 0 ({len(y) - len(pairs)}건 중복)")
+    tot = len(D["train"]["inputs"]) + len(D["test"]["inputs"])
+    chk(tot == (anchor if anchor is not None else tot),
+        f"[6] train+test 행 수 {tot} == pair anchor {anchor}")
 
     # --- split --------------------------------------------------------------
     a, b = set(D["train"]["ghash"]), set(D["test"]["ghash"])

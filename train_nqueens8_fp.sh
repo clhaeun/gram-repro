@@ -29,10 +29,16 @@ export HF_HUB_DISABLE_PROGRESS_BARS=1
 
 mkdir -p logs
 
-ARM="${ARM:?ARM=A2|A3p 를 줘라 (A2: lr1e-3/wd1e-3 = FPRM Table4, A3p: lr1e-4/wd1.0 = 기존 정준)}"
+ARM="${ARM:?ARM=A1|A2|A3p 를 줘라 (A1: fp 없이 lr/wd 만, A2: lr1e-3/wd1e-3 = FPRM Table4, A3p: lr1e-4/wd1.0 = 기존 정준)}"
+# A1 은 fp 블록을 쓰지 않는다 -- arch 가 기존 gram_nqueens8 이다.
+#   A0(기존 arch, lr1e-4/wd1.0) --lr/wd--> A1(기존 arch, lr1e-3/wd1e-3)
+#   A0                          --fp----> A3p(fp arch, lr1e-4/wd1.0)
+#   A1                          --fp----> A2(fp arch, lr1e-3/wd1e-3)
+# A1 이 없으면 A2 의 변화가 pre-norm 때문인지 lr/wd 때문인지 가를 수 없다.
 case "$ARM" in
-  A2)  LR=1e-3; WD=1e-3 ;;
-  A3p) LR=1e-4; WD=1.0 ;;
+  A1)  LR=1e-3; WD=1e-3; ARCH=gram_nqueens8 ;;
+  A2)  LR=1e-3; WD=1e-3; ARCH=gram_nqueens8_fp ;;
+  A3p) LR=1e-4; WD=1.0;  ARCH=gram_nqueens8_fp ;;
   *) echo "FATAL: 알 수 없는 ARM=$ARM"; exit 1 ;;
 esac
 # puzzle_emb 쪽은 이 repo 관례대로 본체와 동일값을 따라간다.
@@ -69,7 +75,7 @@ else
     used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i $g)
     [ "$used" -gt 1000 ] && { echo "FATAL: GPU $g 사용 중 (${used}MiB)"; exit 1; }
   done
-  echo "[preflight] ARM=${ARM} lr=${LR} wd=${WD} GPUS=${GPUS} 전부 유휴 -- launch"
+  echo "[preflight] ARM=${ARM} arch=${ARCH} lr=${LR} wd=${WD} GPUS=${GPUS} 전부 유휴 -- launch"
 fi
 
 LAUNCH=torchrun
@@ -78,7 +84,7 @@ LAUNCH=torchrun
 CUDA_VISIBLE_DEVICES=${GPUS} ${LAUNCH} \
   --nproc-per-node ${NPROC} --rdzv_backend=c10d --rdzv_endpoint=localhost:${PORT} --nnodes=1 \
   pretrain.py \
-  arch=gram_nqueens8_fp \
+  arch=${ARCH} \
   data_paths="[data/nqueens-8]" \
   'evaluators=[{name: nqueens@NQueens}]' \
   epochs=${EPOCHS} eval_interval=200 \

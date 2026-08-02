@@ -99,6 +99,20 @@ def coverage_at_N(cand, inputs, n, totals):
                             found_mean=(float(found[m].mean()) if m.any() else None),
                             total_mean=(float(totals[m].mean()) if m.any() else None)))
     res["by_solution_bucket"] = buckets
+
+    # 행 단위 원자료.  2026-08-03 추가 (기존 키는 하나도 안 건드렸다 -- 순수 추가다).
+    #
+    # 왜 필요한가: test 가 pair 확장(입력 x 가 해 개수 k 만큼 반복)되면서 위 `coverage`
+    # 한 값이 어느 축인지 애매해졌다.  실제로는
+    #     mean_row(found/total) = (1/R)·Σ_x k·(found_x/k) = Σ_x found_x / R  = **pair 축**
+    # 이라 `coverage` 는 pair 가중이다.  입력(퍼즐) 축 mean_x(found_x/total_x) 은 같은 x 의
+    # k 개 행을 먼저 묶어야 나오는데, 집계값만으로는 복원이 안 된다.  그래서 행 배열을 남긴다.
+    # ihash 는 빌더/eval_harness 와 같은 sha1(flat uint8 board)[:16] 이다.
+    res["per_row"] = {
+        "ihash": [hashlib.sha1(v.astype(np.uint8).tobytes()).hexdigest()[:16] for v in inputs],
+        "totals": totals.tolist(),
+        "found": found.tolist(),
+    }
     return res
 
 
