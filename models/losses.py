@@ -87,34 +87,19 @@ class ACTLossHead(nn.Module):
         lm_loss = (self.loss_fn(outputs["logits"], labels, ignore_index=IGNORE_LABEL_ID, valid_mask=mask) / loss_divisor).sum()
         q_halt_loss = F.binary_cross_entropy_with_logits(outputs["q_halt_logits"], seq_is_correct.to(outputs["q_halt_logits"].dtype), reduction="sum")
         
-        # 추론 시에 kl_loss=0
-        kl_loss = torch.zeros((), device=lm_loss.device)
-        # 학습 시: D는 합, batch는 합, L은 config가 정한 reduction
-        # (예전엔 이 두 줄 중 하나를 주석 처리해 골랐다 -- 그래서 어떤 run이 어느
-        #  reduction으로 돌았는지 config만 보고는 알 수 없었다. 이제 명시 키다.)
+        # KL reduction 은 sum 고정: D축 합 -> L축 합 -> batch 합.
+        # 'mean' 은 run 을 붕괴시킨다 (sum = gram_sudoku_halt_only 71.85%,
+        #  mean = gram_sudoku_lmean_v2 1.8%).  분기 자체를 없애 재발을 막는다.
+        kl_loss = torch.zeros((), device=lm_loss.device)   # 추론(prior) 시 kl 없음
         if outputs.get("kl") is not None:
-            kl_reduction = getattr(self.model.config, "kl_reduction", None)
-            if kl_reduction not in ("sum", "mean"):
-                raise ValueError(
-                    f"arch config must set kl_reduction to 'sum' or 'mean', got {kl_reduction!r}. "
-                    "Do not rely on an implicit default: 'sum' is what gram_sudoku_halt_only "
-                    "(71.85%) used, 'mean' is what gram_sudoku_lmean_v2 (1.8%) used."
-                )
-            kl_per_pos = outputs["kl"].sum(-1)                  # [B, L] -- D는 합
-            kl_loss = (kl_per_pos.sum(-1) if kl_reduction == "sum"
-                       else kl_per_pos.mean(-1)).sum()          # L reduction -> batch 합
+            kl_loss = outputs["kl"].sum(-1).sum(-1).sum()
 
-        # 기본 값 0
         lprm_loss = torch.zeros((), device=lm_loss.device)
         if "lrpm_logits" in outputs:
-            # 정답 비율 (전체 셀 수)
+            # LPRM (Appendix A.2 Eq.16): r = 최종 출력 정확도, L = Σ_t (v_ψ(z_t) - r)²
             r = (is_correct.to(torch.float32) / loss_divisor).sum(-1).detach()
-            # MSE; (B, ) -> (B, 1)
             lprm_loss = ((outputs["lrpm_logits"] - r.unsqueeze(-1)) ** 2).sum(-1).sum()
-    
-        
-        
-        # 로그 찍어주는 용
+
         metrics.update({
             "lm_loss": lm_loss.detach(),
             "q_halt_loss": q_halt_loss.detach(),
@@ -122,14 +107,12 @@ class ACTLossHead(nn.Module):
             "lprm_loss": lprm_loss.detach(),
         })
 
-        # sigma / KL diagnostics from gram.py -- already-detached scalars, batch means.
-        # Keys are namespaced `diag/` so pretrain.py normalises them as means, and so
-        # they miss the stdout filter ('loss'/'accuracy') that formats the [step N] line.
+        # FPRM boundedness diagnostics from gram.py (diag/z_h_norm, diag/z_l_norm) --
+        # already-detached scalars, batch means; `diag/` namespace 는 pretrain.py 가
+        # world_size 로만 정규화한다.
         if outputs.get("diag") is not None:
             metrics.update(outputs["diag"])
 
-
-        # Q continue 일단 없앰
         q_continue_loss = 0
         if "target_q_continue" in outputs:
             q_continue_loss = F.binary_cross_entropy_with_logits(outputs["q_continue_logits"], outputs["target_q_continue"], reduction="sum")
