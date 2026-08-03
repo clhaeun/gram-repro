@@ -3,16 +3,22 @@
 sweep_harness.py 를 분기하지 않고 별도 스크립트로 둔다 -- 그쪽 --n 은 보드 크기(n*n=seq),
 여기 --n 은 노드 수(n(n-1)/2=seq)라 한 파일에 섞으면 의미가 엉킨다.
 
-논문 GC 지표 (Table 1, 8-vertex):
-  conflict  = 위반 edge 수. 낮을수록 좋다. 논문 2.7±2.1.
-              여기서는 N샘플 전체(prior_all_samples)의 mean±std 로 잰다.
-  coverage  = 정답해 집합을 몇 % 발견했는가. 논문 85.8±0.5.
+논문 GC 지표 (Table 1, 8-vertex; 번호는 sweep_harness.py docstring 의 ①~⑤ 체계):
+  ② Conflict ↓ (accuracy 대신 보고) = (1/(N·B)) Σ_x Σ_k conflicts(ŷ_x^k)
+              conflicts = 양 끝 노드가 같은 색인 edge 의 개수. 논문 2.7±2.1.
+              -> flat_stats() 의 conflicts_mean (std 병기).
+  ③ coverage  = 정답해 집합을 몇 % 발견했는가. 논문 85.8±0.5.
               found(x) = N 샘플 중 valid 인 보드를 **first-appearance 정규형으로
               canonical 화한 뒤** unique 개수.  <- 정규화 필수. 빠뜨리면 같은 해의
               색 치환(최대 3!=6개)이 서로 다른 해로 잡혀 coverage 가 부풀려진다.
               total(x) = sidecar_gc_8.json 의 per-graph canonical 해 개수.
               빌더가 first-appearance 정규형으로 열거하므로 같은 규칙이어야
               found ⊆ 열거집합이 보장된다 (n_found_gt_total=0 이 그 검산).
+
+  ④ majority@20 (§2.3 방법 1) = canonical 정규화 후 최빈 1개를 valid 채점
+              -> majority_at_N_valid_canonical.  정규화 없는 원본 토큰 최빈은
+              색 치환 때문에 사실상 무작위 선택이라 진단 병기용이다.
+  ⑤ verifier@20 = LPRM best-of-N (§2.3 방법 2) -> verifier_selected_at_N_valid.
 
 N-Queens 와 달리 consistent 개념이 없다: 입력이 그래프 자체라 보존할 힌트가 없고,
 valid(전 edge 양끝 다른 색)가 곧 "x 의 해"다.
@@ -42,18 +48,14 @@ COLOR0 = 3
 
 
 # ---------------------------------------------------------------------------
-# 집계 (전부 순수 numpy -- selftest 가 모델 없이 검증한다)
+# 논문 지표 (전부 순수 numpy -- selftest 가 모델 없이 검증한다)
 # ---------------------------------------------------------------------------
 
-def pass_at_k(num_correct, n_samples, k):
-    """sweep_harness.py 와 동일한 불편추정량."""
-    if n_samples - num_correct < k:
-        return 1.0
-    return 1.0 - comb(n_samples - num_correct, k) / comb(n_samples, k)
-
-
 def majority_row(rows):
-    """최빈 보드, 동률은 첫 등장 (sweep_harness 와 동일)."""
+    """④ 의 selection: 최빈 보드, 동률은 첫 등장 (sweep_harness 와 동일).
+
+    GC 논문 지표로는 canonicalize() 를 거친 보드에 적용한다 (main() 의 majc 경로).
+    """
     return np.array(Counter(tuple(r) for r in rows).most_common(1)[0][0], dtype=np.int64)
 
 
@@ -81,7 +83,11 @@ def graph_hash_rows(inputs):
 
 
 def flat_stats(preds, inputs, n):
-    """preds [K, B, L] -> 단일시도 지표.  conflict 는 mean±std (논문 2.7±2.1 형식)."""
+    """preds [K, B, L] -> 단일시도 지표.  ② Conflict = conflicts_mean (±std, 논문 2.7±2.1 형식).
+
+    num_colors_used_mean 은 논문 대응 없음 -- 단색 붕괴(모든 노드 같은 색) 감지용
+    진단값이라 계산을 유지한다.
+    """
     K, B, L = preds.shape
     r = verify_colorings(preds.reshape(K * B, L), np.tile(inputs, (K, 1)), n)
     return dict(valid=float(r["valid"].mean()),
@@ -92,7 +98,7 @@ def flat_stats(preds, inputs, n):
 
 
 def coverage_at_N(cand, inputs, n, totals):
-    """cand [N, B, L].  found = valid 샘플의 canonical unique 수, total = sidecar 해 수."""
+    """③ coverage.  cand [N, B, L].  found = valid 샘플의 canonical unique 수, total = sidecar 해 수."""
     N, B, L = cand.shape
     r = verify_colorings(cand.reshape(N * B, L), np.tile(inputs, (N, 1)), n)
     ok = r["valid"].reshape(N, B)
@@ -129,16 +135,32 @@ def coverage_at_N(cand, inputs, n, totals):
     return res
 
 
+# ---------------------------------------------------------------------------
+# 진단용 (논문 대응 없음).  pass_at, distinct_at_N, prior_single_k0, posterior,
+# num_colors_used(단색 붕괴 감지 -- 계산 유지), 비정규화 majority.
+# ---------------------------------------------------------------------------
+
+def pass_at_k(num_correct, n_samples, k):
+    """진단용 불편추정량 (sweep_harness.py 와 동일). 논문 지표 아님."""
+    if n_samples - num_correct < k:
+        return 1.0
+    return 1.0 - comb(n_samples - num_correct, k) / comb(n_samples, k)
+
+
 METRIC_DEFS = {
-    "prior_all_samples.valid": "단일시도. 모든 edge 양끝이 다른 색 + 전 노드가 색 토큰(3..5). pass@1 과 동일.",
-    "prior_all_samples.conflicts_mean/std": "논문 GC 헤드라인(8-vertex 2.7±2.1, 낮을수록 좋음). N샘플 전체의 위반 edge 수 분포.",
-    "posterior": "정답 y 를 본 경로. prior 와 다른 축.",
-    "pass_at": "N 중 k개를 뽑아 1개 이상 valid 일 확률(불편추정량).",
-    "majority_at_N_valid": "N샘플 최빈 보드 1개(동률 첫 등장)를 valid 채점. GC 는 distinct@20≈N 이라 사실상 무작위 1개 -- canonical 판을 쓸 것.",
-    "majority_at_N_valid_canonical": "색 치환 동치류를 canonical 화로 합친 뒤의 최빈 1개를 valid 채점. 이쪽이 진짜 다수결.",
-    "verifier_selected_at_N_valid": "모델 lrpm 점수 최고 샘플 1개를 valid 채점. 정답 미사용.",
-    "distinct_at_N_mean": "N샘플 중 서로 다른 보드 수(다양성, 정확도 아님).",
-    "coverage_at_20": "논문 coverage(85.8±0.5). found = valid 샘플의 first-appearance canonical unique 수, "
+    "논문지표": "② prior_all_samples.conflicts_mean(±std) ③ coverage_at_20 "
+              "④ majority_at_N_valid_canonical ⑤ verifier_selected_at_N_valid.  "
+              "나머지는 진단용(논문 대응 없음).",
+    "prior_all_samples.valid": "진단(GC 는 accuracy 대신 ② conflict 를 보고). 모든 edge 양끝이 다른 색 + 전 노드가 색 토큰(3..5). pass@1 과 동일.",
+    "prior_all_samples.conflicts_mean/std": "★② 논문 GC 헤드라인(8-vertex 2.7±2.1, 낮을수록 좋음). N샘플 전체의 위반 edge 수 분포.",
+    "prior_all_samples.num_colors_used_mean": "진단. 단색 붕괴(전 노드 같은 색) 감지용.",
+    "posterior": "진단. 정답 y 를 본 경로. prior 와 다른 축.",
+    "pass_at": "진단. N 중 k개를 뽑아 1개 이상 valid 일 확률(불편추정량).",
+    "majority_at_N_valid": "진단. N샘플 최빈 보드 1개(동률 첫 등장)를 valid 채점. GC 는 distinct@20≈N 이라 사실상 무작위 1개 -- canonical 판을 쓸 것.",
+    "majority_at_N_valid_canonical": "★④ 논문 §2.3 selection 방법 1. 색 치환 동치류를 canonical 화로 합친 뒤의 최빈 1개를 valid 채점. 이쪽이 진짜 다수결.",
+    "verifier_selected_at_N_valid": "★⑤ 논문 §2.3 방법 2 = LPRM best-of-N. 모델 lrpm 점수 최고 샘플 1개를 valid 채점. 정답 미사용.",
+    "distinct_at_N_mean": "진단. N샘플 중 서로 다른 보드 수(다양성, 정확도 아님).",
+    "coverage_at_20": "★③ 논문 coverage(85.8±0.5). found = valid 샘플의 first-appearance canonical unique 수, "
                       "total = sidecar per-graph canonical 해 수. N-Queens 와 달리 consistent 조건 없음(입력에 힌트가 없다).",
 }
 
@@ -241,23 +263,25 @@ def main():
     res = {"checkpoint": os.path.join(args.ckpt_dir, args.step), "n": B, "N": args.N,
            "seed": args.seed, "sigma_scale": args.sigma_scale, "tag": args.tag}
 
-    res["prior_all_samples"] = flat_stats(cand, inputs, args.n)
-    res["prior_single_k0"] = flat_stats(cand[:1], inputs, args.n)
-    res["posterior"] = flat_stats(post["preds"], inputs, args.n)
+    res["prior_all_samples"] = flat_stats(cand, inputs, args.n)     # ② Conflict = .conflicts_mean
+    res["prior_single_k0"] = flat_stats(cand[:1], inputs, args.n)   # 진단
+    res["posterior"] = flat_stats(post["preds"], inputs, args.n)    # 진단
 
+    # 진단: pass@k
     vb = verify_colorings(cand.reshape(args.N * B, -1), np.tile(inputs, (args.N, 1)), args.n)
     valid = vb["valid"].reshape(args.N, B).T
     nc = valid.sum(1)
     res["pass_at"] = {str(k): float(np.mean([pass_at_k(int(c), args.N, k) for c in nc]))
                       for k in (1, 5, 10, 20) if k <= args.N}
 
+    # ④ canonical majority / ⑤ verifier(LPRM best-of-N) / 진단: 비정규화 majority, distinct
     maj, sel, dis, majc = [], [], [], []
     for b in range(B):
         rows = cand[:, b, :]
         maj.append(majority_row(rows))
-        sel.append(rows[int(np.argmax(v[:, b]))])
+        sel.append(rows[int(np.argmax(v[:, b]))])       # ⑤ v = lrpm_head 점수 [N, B]
         dis.append(len({tuple(r) for r in rows}))
-        # canonical majority: 색 치환된 같은 해를 한 후보로 합친 뒤 최빈을 뽑는다.
+        # ④ canonical majority: 색 치환된 같은 해를 한 후보로 합친 뒤 최빈을 뽑는다.
         # GC 는 distinct@20 이 20 에 붙어 있어 원본 토큰 최빈은 사실상 무작위 1개다.
         # canonical 화는 색만 재라벨하므로 validity 를 보존한다 -> canonical 보드를 그대로 채점.
         cols = rows[:, :args.n]

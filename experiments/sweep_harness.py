@@ -1,8 +1,22 @@
-"""KL sweep용 harness: prior N=20 + posterior 1샷을 한 번에, **valid 기준**으로 집계.
+"""N-Queens harness: prior N=20 + posterior 1샷을 한 번에, **valid 기준**으로 집계.
+
+논문 지표 (이 파일이 산출하는 4종; ② Conflict 는 GC 전용이라 gc_harness.py):
+
+  ① Accuracy (Table 1 "single-sample")   = (1/(N·B)) Σ_x Σ_k valid(ŷ_x^k)
+     valid = 퀸 정확히 n개 ∧ 행·열·양대각(row−col, row+col) 중복 없음.
+     consistent(입력 힌트 보존)는 포함하지 않는다. pass@1 의 추정량.
+     -> flat_stats() 의 valid 필드 = prior_all_samples.valid
+  ③ Coverage@20 (Table 1)                = (1/B) Σ_x found(x)/total(x)
+     -> coverage_at_N(). found 판정은 valid ∧ consistent (아래 docstring).
+  ④ majority@20 (§2.3 selection 방법 1)   -> majority_row() -> majority_at_N_valid
+  ⑤ verifier@20 = LPRM best-of-N (§2.3 방법 2, Appendix A.2 Eq.16)
+     LPRM = value head v_ψ(z_t), 최종 출력 정확도 r 을 회귀하도록 joint 학습
+     (L_LPRM = Σ_t (v_ψ(z_t) − r)²). 추론 시 v_ψ 최고점 1개를 valid 채점. 정답 미사용.
+     -> main() 의 rows[argmax(v[:,b])] -> verifier_selected_at_N_valid
 
 experiments/eval_harness.py 를 쓰지 않는 이유: 그쪽 NQueensTask.verify 는
 `strict`(valid AND consistent)를 정답 기준으로 반환한다(eval_harness.py:120-126).
-이번 지시는 valid 기준 majority/pass/verifier_selected 를 요구하므로 별도로 집계한다.
+논문 축은 valid 기준 majority/pass/verifier_selected 라 별도로 집계한다.
 샘플링 RNG 스트림은 gram_harness.rollout 그대로다(seed*100003+k).
 
 사용법:
@@ -26,15 +40,27 @@ from experiments.gram_harness import load_model, rollout   # noqa: E402
 from evaluators.nqueens import verify_boards               # noqa: E402
 
 
-def pass_at_k(num_correct, n_samples, k):
-    """eval_harness.py:248-253 과 동일한 불편추정량."""
-    if n_samples - num_correct < k:
-        return 1.0
-    return 1.0 - comb(n_samples - num_correct, k) / comb(n_samples, k)
+# ---------------------------------------------------------------------------
+# 논문 지표 (Table 1 / §2.3).  번호는 모듈 docstring 의 ①~⑤.
+# ---------------------------------------------------------------------------
+
+def flat_stats(preds, inputs, n):
+    """preds [K, B, L] -> 전 샘플 평균.  valid 필드가 ① Accuracy (K=N 일 때).
+
+    strict / consistent 는 보고 표에서 제외된 진단값이지만 **계산은 유지한다**:
+    consistent 는 ③ coverage 의 found 판정(valid ∧ consistent)과 같은 축이고,
+    strict 는 과거 결과와의 대조 축이다.
+    """
+    K, B, L = preds.shape
+    r = verify_boards(preds.reshape(K * B, L), np.tile(inputs, (K, 1)), n)
+    qc = r["queen_count"]
+    return dict(valid=float(r["valid"].mean()), consistent=float(r["consistent"].mean()),
+                strict=float(r["strict"].mean()), queen_count_mean=float(qc.mean()),
+                queen_count_min=int(qc.min()), queen_count_max=int(qc.max()))
 
 
 def majority_row(rows):
-    """eval_harness.py:255-258 과 동일: 최빈 보드, 동률은 첫 등장."""
+    """④ majority@20 의 selection: 최빈 보드, 동률은 첫 등장 (eval_harness.py:255-258 과 동일)."""
     return np.array(Counter(tuple(r) for r in rows).most_common(1)[0][0], dtype=np.int64)
 
 
@@ -60,7 +86,7 @@ SOL_BUCKETS = [("1", 1, 1), ("2-5", 2, 5), ("6-20", 6, 20), ("21+", 21, 10 ** 9)
 
 
 def coverage_at_N(cand, inputs, n, totals):
-    """논문 Table 1 의 coverage = "unique valid solutions discovered with 20 samples".
+    """③ 논문 Table 1 의 coverage = "unique valid solutions discovered with 20 samples".
 
     문제 x 마다
       found(x) = N 샘플 중 **valid AND consistent** 인 보드의 unique 개수
@@ -116,22 +142,41 @@ def coverage_at_N(cand, inputs, n, totals):
     return res
 
 
+# ---------------------------------------------------------------------------
+# 진단용 (논문 대응 없음).  보고 표 하단에만 병기한다.
+#   pass_at, distinct_at_N_mean, prior_single_k0, posterior,
+#   prior_all_samples.strict/consistent (표에서 제외하되 계산 유지 -- flat_stats 참조)
+# ---------------------------------------------------------------------------
+
+def pass_at_k(num_correct, n_samples, k):
+    """진단용 불편추정량 (eval_harness.py:248-253 과 동일). 논문 지표 아님."""
+    if n_samples - num_correct < k:
+        return 1.0
+    return 1.0 - comb(n_samples - num_correct, k) / comb(n_samples, k)
+
+
 # 결과 json 소비자가 지표를 헷갈리지 않도록 정의를 파일 자체에 박아둔다.
 # 축: [가중치는 --ckpt-dir/--step 로, 경로는 이 스크립트=harness, 표본=N, 기준=valid/strict]
 METRIC_DEFS = {
+    "논문지표": "① prior_all_samples.valid ③ coverage_at_20 ④ majority_at_N_valid "
+              "⑤ verifier_selected_at_N_valid.  (② conflict 는 GC 전용 -- gc_harness.py)  "
+              "나머지는 진단용(논문 대응 없음).",
     "집계방식/단일시도": "퍼즐당 N 샘플을 각각 채점한 평균. '한 번 뽑아 맞을 확률'. pass@1 과 수학적으로 동일.",
-    "prior_all_samples.valid": "단일시도, valid 기준(퀸 n개 + 행/열/양대각 중복 없음). 입력 힌트 보존은 보지 않음.",
-    "prior_all_samples.consistent": "단일시도, 입력에 주어진 퀸을 모두 보존했는가.",
-    "prior_all_samples.strict": "단일시도, valid AND consistent.",
-    "prior_single_k0": "단일시도지만 k=0 샘플 1개만 사용(표본 1/N). 참고용.",
-    "posterior": "정답 y 를 본 posterior 경로. prior 성능과 다른 축이라 같이 읽지 말 것.",
-    "집계방식/pass@k": "퍼즐당 N 샘플 중 k 개를 뽑았을 때 1개 이상 valid 일 확률(불편추정량). k=N 이면 puzzles_with_ge1_valid 와 항상 동일.",
+    "prior_all_samples.valid": "★① 논문 Table 1 single-sample accuracy. valid 기준(퀸 n개 + 행/열/양대각 중복 없음). "
+                               "입력 힌트 보존(consistent)은 포함하지 않음.",
+    "prior_all_samples.consistent": "진단. 단일시도, 입력에 주어진 퀸을 모두 보존했는가. (③ found 판정에 쓰이는 축)",
+    "prior_all_samples.strict": "진단. 단일시도, valid AND consistent.",
+    "prior_single_k0": "진단. 단일시도지만 k=0 샘플 1개만 사용(표본 1/N). 참고용.",
+    "posterior": "진단. 정답 y 를 본 posterior 경로. prior 성능과 다른 축이라 같이 읽지 말 것.",
+    "집계방식/pass@k": "진단. 퍼즐당 N 샘플 중 k 개를 뽑았을 때 1개 이상 valid 일 확률(불편추정량). "
+                     "k=N 이면 puzzles_with_ge1_valid 와 항상 동일.",
     "집계방식/selection": "N 샘플에서 1개를 고른 뒤 채점. 고르는 규칙이 majority / verifier.",
-    "majority_at_N_valid": "selection. N 샘플의 최빈 보드 1개(동률은 첫 등장)를 valid 채점.",
-    "verifier_selected_at_N_valid": "selection. 모델 자신의 lrpm_head 점수가 최고인 샘플 1개를 valid 채점. 정답 미사용.",
-    "distinct_at_N_mean": "다양성 지표(정확도 아님). N 샘플 중 서로 다른 보드 수, 1~N.",
+    "majority_at_N_valid": "★④ 논문 §2.3 selection 방법 1. N 샘플의 최빈 보드 1개(동률은 첫 등장)를 valid 채점.",
+    "verifier_selected_at_N_valid": "★⑤ 논문 §2.3 방법 2 = LPRM best-of-N (Appendix A.2 Eq.16). "
+                                    "v_ψ(z_t) 점수 최고 샘플 1개를 valid 채점. 정답 미사용.",
+    "distinct_at_N_mean": "진단. 다양성 지표(정확도 아님). N 샘플 중 서로 다른 보드 수, 1~N.",
     "집계방식/coverage": "정답해 집합을 몇 % 발견했는가. 위 셋과 완전히 다른 축.",
-    "coverage_at_20": "논문 Table 1 coverage. 퍼즐마다 found/total 을 구해 전체 평균. "
+    "coverage_at_20": "★③ 논문 Table 1 coverage. 퍼즐마다 found/total 을 구해 전체 평균. "
                       "found = N 샘플 중 valid AND consistent 인 보드의 unique 개수, "
                       "total = sidecar 의 per-x 전체 해 개수(라벨 개수 아님). N 은 --N (기본 20).",
     "coverage_at_20.by_solution_bucket": "논문 Fig 15 대응. total(x) 을 {1, 2-5, 6-20, 21+} 로 나눈 분해.",
@@ -195,16 +240,6 @@ def log_to_wandb(res, seed):
     print(f"  [wandb] {project}/{harness_run_name(train_run, weights, seed)} <- step {step}")
 
 
-def flat_stats(preds, inputs, n):
-    """preds [K, B, L] -> valid/consistent/strict/queen_count 를 전 샘플 평균."""
-    K, B, L = preds.shape
-    r = verify_boards(preds.reshape(K * B, L), np.tile(inputs, (K, 1)), n)
-    qc = r["queen_count"]
-    return dict(valid=float(r["valid"].mean()), consistent=float(r["consistent"].mean()),
-                strict=float(r["strict"].mean()), queen_count_mean=float(qc.mean()),
-                queen_count_min=int(qc.min()), queen_count_max=int(qc.max()))
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ckpt-dir", required=True)
@@ -239,30 +274,32 @@ def main():
            "seed": args.seed, "sigma_scale": args.sigma_scale, "mu_scale": args.mu_scale,
            "tag": args.tag}
 
-    res["prior_all_samples"] = flat_stats(cand, inputs, args.n)
-    res["prior_single_k0"] = flat_stats(cand[:1], inputs, args.n)
-    res["posterior"] = flat_stats(post["preds"], inputs, args.n)
+    res["prior_all_samples"] = flat_stats(cand, inputs, args.n)     # ① Accuracy = .valid
+    res["prior_single_k0"] = flat_stats(cand[:1], inputs, args.n)   # 진단
+    res["posterior"] = flat_stats(post["preds"], inputs, args.n)    # 진단
 
     # per-puzzle valid 행렬 [B, N]
     vb = verify_boards(cand.reshape(args.N * B, -1), np.tile(inputs, (args.N, 1)), args.n)
     valid = vb["valid"].reshape(args.N, B).T                # [B, N]
 
+    # 진단: pass@k
     nc = valid.sum(1)
     res["pass_at"] = {str(k): float(np.mean([pass_at_k(int(c), args.N, k) for c in nc]))
                       for k in (1, 5, 10, 20) if k <= args.N}
 
+    # ④ majority / ⑤ verifier(LPRM best-of-N) / 진단: distinct
     maj, sel, dis = [], [], []
     for b in range(B):
         rows = cand[:, b, :]
         maj.append(majority_row(rows))
-        sel.append(rows[int(np.argmax(v[:, b]))])
+        sel.append(rows[int(np.argmax(v[:, b]))])       # ⑤ v = lrpm_head 점수 [N, B]
         dis.append(len({tuple(r) for r in rows}))
     maj, sel = np.stack(maj), np.stack(sel)
     res["majority_at_N_valid"] = float(verify_boards(maj, inputs, args.n)["valid"].mean())
     res["verifier_selected_at_N_valid"] = float(verify_boards(sel, inputs, args.n)["valid"].mean())
     res["distinct_at_N_mean"] = float(np.mean(dis))
 
-    # coverage: 위 지표들과 다른 축(정답해 집합의 발견 비율). 기존 키는 건드리지 않는다.
+    # ③ coverage: 위 지표들과 다른 축(정답해 집합의 발견 비율). 기존 키는 건드리지 않는다.
     totals = solution_counts(inputs, args.sidecar)
     res["coverage_at_20"] = coverage_at_N(cand, inputs, args.n, totals)
     res["metric_defs"] = METRIC_DEFS
