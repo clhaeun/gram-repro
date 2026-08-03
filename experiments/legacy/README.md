@@ -18,6 +18,8 @@
 | `wandb_make_report.py` | wandb report 패널 구성 스크립트. offline 환경이라 dry-run 위주로 쓰였다. |
 | `wandb_tag_runs.py` | wandb run 일괄 태깅(probe/final 구분). 2026-07-30 정리 때 사용. |
 | `diag/` | 진단 스크립트 20종. 각 파일 → REPORT 매핑은 [diag/README.md](diag/README.md) 에 있다. |
+| `gram_legacy.py` | 2026-08-03 정리 직전의 `models/recursive_reasoning/gram.py` 원본 스냅샷 (cp). 정리 diff 의 대조본. |
+| `pretrain_legacy.py` | 같은 시점의 `pretrain.py` 원본 스냅샷 (cp). |
 
 ## 실행
 

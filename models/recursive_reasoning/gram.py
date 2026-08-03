@@ -53,7 +53,6 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     rope_theta: float = 10000.
     
 
-    # config - looped transformer
     # --- FPRM 기여1: pre-norm + residual scaling (fp_transformer) ----------
     # False = 기존 ReasoningModule 경로 그대로. 기존 yaml/checkpoint 무영향.
     use_fp_transformer: bool = False
@@ -72,9 +71,6 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     use_spec_norm_linear: bool = False
     weight_dropout: float = 0.0
 
-    
-    
-    
     # Halting Q-learning config
     halt_max_steps: int
     halt_exploration_prob: float
@@ -99,7 +95,6 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     kl_reduction: str = "sum"   # "sum" | "mean"
 
 
-    # noise head expansion 수정하기
     noise_head_expansion: float = 4.0
 
     # prior/posterior logvar 헤드에 더하는 학습가능 스칼라 bias 의 초기값.
@@ -129,7 +124,6 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     # W 는 [I ; I] 로 초기화되므로 step 0 에서 concat 은 add 와 수치적으로 동일하다 --
     # 두 arm 의 차이는 학습이 W 를 항등에서 밀어낸 결과로만 남는다.
     y_inject: str = "add"   # "add" | "concat"
-
 
 
 class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
@@ -255,10 +249,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             self.q_head.bias.fill_(-5)  # type: ignore
 
         D = self.config.hidden_size
-
-        # 0723: noise_head_expansion 수정
         nh_exp = self.config.noise_head_expansion
-
 
         self.prior_mu = SwiGLU(hidden_size=D, expansion=nh_exp)
         self.prior_logvar = SwiGLU(hidden_size=D, expansion=nh_exp)
@@ -357,7 +348,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         return mu + eps * std
 
 
-    # z_H랑 y_emb를 옆으로 이어붙여서 만든 y_concat_proj(2D 차원)에 행렬 W를 곱해서 다시 D차원으로 축소시킨다
     def _inject_y(self, z_H, y_emb):
         """posterior 입력 u_y 를 만든다.  prior 는 이 함수를 쓰지 않는다.
 
@@ -390,7 +380,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         return dev.norm() / math.sqrt(2.0 * D)
 
 
-    # 학습 중간에 노이즈 상태가 어떤지
     @torch.no_grad()
     def _latent_diag(self, mu_p, logvar_p, mu_q, logvar_q, kl, z_H=None, z_L=None):
         """Scalar diagnostics for the final (grad-carrying) transition.
@@ -451,7 +440,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
     def forward(self, carry: TinyRecursiveReasoningModel_ACTV1InnerCarry, batch: Dict[str, torch.Tensor], use_posterior: Optional[bool] = None) -> Tuple[TinyRecursiveReasoningModel_ACTV1InnerCarry, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
 
-        # 훈련 시 -> prior gap 확인
         if use_posterior is None:
             use_posterior = self.training
 
@@ -482,7 +470,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
                 z_H = self.L_level(z_H, z_L, **seq_info)
 
-                mu_p = self.prior_mu(z_H)  # 차원 크기 맞춰주기
+                mu_p = self.prior_mu(z_H)
                 logvar_p = self.prior_logvar(z_H) + self.prior_logvar_bias
 
                 if use_posterior:
@@ -535,7 +523,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         new_carry = TinyRecursiveReasoningModel_ACTV1InnerCarry(z_H=z_H.detach(), z_L=z_L.detach())  # New carry no grad
         output = self.lm_head(z_H)[:, self.puzzle_emb_len:]
 
-        q_logits = self.q_head(z_H[:, 0].detach()).to(torch.float32)  # 0번째 토큰 사용 
+        q_logits = self.q_head(z_H[:, 0].detach()).to(torch.float32)
 
         lrpm_logits = self.lrpm_head(torch.stack(lrpm_z, dim=1)).to(torch.float32).squeeze(-1)
         return new_carry, output, (q_logits[..., 0], q_logits[..., 1]), kl, lrpm_logits, diag
@@ -583,15 +571,12 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
             "lrpm_logits": lrpm_logits
         }
 
-        # kl이 None일 수가 있음
         if kl is not None:
             outputs["kl"] = kl
 
         # metrics-only side channel (dict of scalars); never a loss term
         if diag is not None:
             outputs["diag"] = diag
-
-
 
         with torch.no_grad():
             # Step
