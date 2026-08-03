@@ -82,18 +82,10 @@ class PretrainConfig(pydantic.BaseModel):
 
     ema: bool = False # use Exponential-Moving-Average
     ema_rate: float = 0.999 # EMA-rate
-    dual_eval: bool = False # with ema, also eval the raw (non-EMA) weights and log them under `_raw`
     freeze_weights: bool = False # If True, freeze weights and only learn the embeddings
 
-    # weight decay 예외.  기본 False = 현행과 bit-identical (AdamW 단일 param_group).
-    # 두 대상을 하나로 묶지 않은 이유: y_concat_proj 는 논문에 없는 신규 모듈이라 wd 처리에
-    # 논문 근거가 없지만, logvar_bias 는 기존 완주 run 전부가 wd 걸린 채로 돌았으므로
-    # 빼면 그 run 들과 비교 축이 어긋난다.  독립적으로 켤 수 있어야 한다.
-    nodecay_y_proj: bool = False        # y_concat_proj.weight
-    nodecay_logvar_bias: bool = False   # prior_logvar_bias, post_logvar_bias
     # FPRM 모듈이 파라미터에 `_no_weight_decay` 속성으로 wd 예외를 표시한다
-    # (fp_transformer 의 input-independent α 등).  이름 기반 targets 와 독립적으로,
-    # 그 마킹을 존중할지 여부.  기본 False = 현행과 bit-identical.
+    # (fp_transformer 의 input-independent α 등).  기본 False = AdamW 단일 param_group.
     nodecay_marked: bool = False
 
 @dataclass
@@ -127,48 +119,24 @@ def create_dataloader(config: PretrainConfig, split: str, rank: int, world_size:
 
 
 def _adamw_param_arg(model: nn.Module, config: PretrainConfig):
-    """AdamW 에 넘길 params 인자를 만든다.
+    """AdamW 에 넘길 params 인자.  nodecay_marked=False 면 `model.parameters()` 그대로.
 
-    두 nodecay 플래그가 모두 False 면 `model.parameters()` 를 그대로 돌려주므로 호출부가
-    기존과 글자 그대로 같아진다 -- 현행 경로는 bit-identical 하게 남는다.
-
-    켜져 있으면 [{decay group, wd=config.weight_decay}, {nodecay group, wd=0.0}] 두 개의
-    param_group 을 돌려준다.  lr 은 pretrain.py 의 optimizer step 이 `for param_group in
-    optim.param_groups` 로 **전수 순회**하며 설정하므로(인덱스 하드코딩 없음) group 이
-    2 개가 되어도 양쪽 다 갱신된다.
-
-    주의: puzzle_emb 는 `model.parameters()` 가 아니라 `.buffers()` 로 별도 optimizer 에
-    들어가므로 여기서 중복되지 않는다.
+    True 면 FPRM 이 `_no_weight_decay` 로 마킹한 파라미터를 weight_decay=0 group 으로
+    뺀다.  lr 은 optimizer step 이 param_groups 를 전수 순회하며 설정하므로 group 이
+    2 개여도 양쪽 다 갱신된다.  puzzle_emb 는 `.buffers()` 로 별도 optimizer 라
+    여기서 중복되지 않는다.  켜 놓고 하나도 안 걸리면 조용히 현행 동작이 되므로 죽인다.
     """
-    targets = []
-    if config.nodecay_y_proj:
-        targets.append("y_concat_proj.weight")
-    if config.nodecay_logvar_bias:
-        targets += ["prior_logvar_bias", "post_logvar_bias"]
-    if not targets and not config.nodecay_marked:
+    if not config.nodecay_marked:
         return model.parameters()
 
     decay, nodecay, hit = [], [], []
     for name, param in model.named_parameters():
-        by_name = any(name.endswith(t) for t in targets)
-        by_attr = config.nodecay_marked and getattr(param, "_no_weight_decay", False)
-        if by_name or by_attr:
+        if getattr(param, "_no_weight_decay", False):
             nodecay.append(param)
             hit.append(name)
         else:
             decay.append(param)
-
-    # 켜 놓고 하나도 안 걸리면 조용히 현행 동작으로 돌아가므로 시끄럽게 죽인다.
-    for t in targets:
-        if not any(name.endswith(t) for name in hit):
-            raise ValueError(
-                f"nodecay 대상 {t!r} 이 모델에 없다. "
-                f"(y_inject={getattr(config.arch, 'y_inject', None)!r} 인데 "
-                f"nodecay_y_proj 를 켠 것은 아닌지 확인해라)")
-
-    # 마킹 모드도 같은 원칙: 켜 놓고 하나도 안 걸리면 조용히 현행 동작이 되므로 죽인다.
-    if config.nodecay_marked and not any(
-            getattr(p, "_no_weight_decay", False) for p in nodecay):
+    if not nodecay:
         raise ValueError("nodecay_marked 를 켰는데 _no_weight_decay 파라미터가 없다")
 
     print(f"[nodecay] weight_decay=0 대상 {len(nodecay)}개: {hit}", flush=True)
@@ -209,8 +177,6 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
                 for param in list(model.parameters()) + list(model.buffers()):
                     dist.broadcast(param, src=0)
 
-    # AdamW 에 넘길 인자.  두 nodecay 플래그가 모두 False 면 model.parameters() 를 글자
-    # 그대로 돌려주므로 기존 경로가 bit-identical 하게 남는다.
     adamw_params = _adamw_param_arg(model, config)
 
     # Optimizers and lr
@@ -681,8 +647,6 @@ def launch(hydra_config: DictConfig):
         print('Setup EMA')
         ema_helper = EMAHelper(mu=config.ema_rate)
         ema_helper.register(train_state.model)
-    if config.dual_eval and not config.ema:
-        print("dual_eval=True but ema=False -- the single eval already runs on the raw weights, nothing to add")
 
     # Training Loop
     for _iter_id in range(total_iters):
@@ -737,28 +701,18 @@ def launch(hydra_config: DictConfig):
                 wandb.log({**metrics, **mirror}, step=train_state.step)
                 print(f"[EVAL @ step {train_state.step}] " + " ".join(f"{k}={v:.4f}" for k, v in sorted(flatten_metrics(metrics).items())), flush=True)
 
-            ############ Raw (non-EMA) evaluation at the same step
-            # With ema=True the block above only ever sees the EMA copy, so the
-            # in-loop curve says nothing about the live SGD weights (the post-hoc
-            # .live scan that answers this costs 1-2h per run).  dual_eval runs
-            # the identical eval once more on the raw model and logs it under a
-            # `_raw` suffix, so both curves finish with the run.
-            #
-            # The raw pass is side-effect free: it gets a config copy with no
-            # checkpoint_path / eval_save_outputs, so it cannot overwrite the
-            # prediction dumps or evaluator artifacts the EMA pass just wrote.
-            # It touches no training state -- evaluate() runs under
-            # inference_mode and builds its own carry; ema_helper is not read or
-            # updated here; .eval() is undone by the model.train() at the top of
-            # the next iteration.
-            if config.ema and config.dual_eval:
+            ############ Raw (non-EMA) evaluation at the same step -- ema=True 면 항상.
+            # EMA 곡선만 보면 EMA 가 학습 중반에 0% 인 구간에서 run 을 오독한다.
+            # raw pass 는 side-effect free: checkpoint_path/eval_save_outputs 를 비운
+            # config 사본을 받아 EMA pass 의 산출물을 덮지 못한다.
+            if config.ema:
                 if RANK == 0:
                     print("EVALUATE RAW (non-EMA)")
                 raw_config = config.model_copy(update={"checkpoint_path": None, "eval_save_outputs": []})
                 # The extra forward passes would otherwise advance the torch RNG
                 # (GRAM samples noise every forward), so training after this eval
-                # would diverge from the same seed with dual_eval=False.  Snapshot
-                # and restore so the toggle cannot move the training trajectory.
+                # would diverge from an ema=False run at the same seed.  Snapshot
+                # and restore so the raw pass cannot move the training trajectory.
                 rng_cpu = torch.get_rng_state()
                 rng_cuda = torch.cuda.get_rng_state_all()
                 train_state.model.eval()
