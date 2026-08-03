@@ -28,5 +28,4 @@ no_ACT_continue: True
 # GRAM용
 kl_coef: 0.1        # KL 가중치
 kl_balance: 0.8     # KL balancing 비율
-kl_reduction: sum   # L축 reduction. halt_only(71.85%)=sum, lmean_v2(1.8%)=mean
-lprm_coef: 1.0      # 일단 1로 둠
+lprm_coef: 1.0

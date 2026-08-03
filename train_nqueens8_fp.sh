@@ -48,23 +48,18 @@ PEWD="${PEWD:-$WD}"
 GPUS="${GPUS:-4}"
 NPROC="${NPROC:-$(echo $GPUS | tr ',' '\n' | wc -l)}"
 PORT="${PORT:-29671}"
+# 2026-08-03 minimal: kl_reduction=sum / y one-hot zeropad 0.573 / logvar bias 0.0 /
+# y_inject add / dual eval(ema 시) / nodecay name 분기는 코드에 하드코딩돼 손잡이가 사라졌다.
+# 구 기본값(KL_RED=sum, YONEHOT=True zeropad 0.573, LOGVARBIAS=0.0, YINJECT=add,
+# DUALEVAL=True, NODECAY_*=False)과 전부 동일하므로 launch 결과는 그대로다.
 BETA="${BETA:-0.07}"
-KL_RED="${KL_RED:-sum}"        # gram_nqueens8_fp.yaml 이 sum 이므로 기본도 sum
 EMA="${EMA:-True}"
 EMA_RATE="${EMA_RATE:-0.9999}"
 WARMUP="${WARMUP:-500}"
 NHEXP="${NHEXP:-1.5}"
-YONEHOT="${YONEHOT:-True}"
-YOPROJ="${YOPROJ:-zeropad}"
-YOSCALE="${YOSCALE:-0.573}"
 EPOCHS="${EPOCHS:-7200}"
 SEED="${SEED:-0}"
-DUALEVAL="${DUALEVAL:-True}"
-LOGVARBIAS="${LOGVARBIAS:-0.0}"
-YINJECT="${YINJECT:-add}"
 LRMIN="${LRMIN:-1.0}"
-NODECAY_YPROJ="${NODECAY_YPROJ:-False}"
-NODECAY_LOGVARBIAS="${NODECAY_LOGVARBIAS:-False}"
 NODECAY_MARKED="${NODECAY_MARKED:-False}"   # residual_scale=fixed 면 마킹 파라미터가 없어 켜면 즉사(의도)
 RUN="${RUN:?RUN 을 줘라}"
 
@@ -91,15 +86,12 @@ CUDA_VISIBLE_DEVICES=${GPUS} ${LAUNCH} \
   seed=${SEED} \
   lr=${LR} puzzle_emb_lr=${PELR} weight_decay=${WD} puzzle_emb_weight_decay=${PEWD} \
   lr_min_ratio=${LRMIN} \
-  nodecay_y_proj=${NODECAY_YPROJ} nodecay_logvar_bias=${NODECAY_LOGVARBIAS} \
   nodecay_marked=${NODECAY_MARKED} \
   arch.mlp_t=False arch.pos_encodings=rope \
   arch.L_layers=2 \
   arch.H_cycles=3 arch.L_cycles=4 arch.halt_max_steps=16 \
   global_batch_size=768 \
-  arch.kl_coef=${BETA} arch.kl_reduction=${KL_RED} arch.noise_head_expansion=${NHEXP} \
-  arch.y_onehot=${YONEHOT} arch.y_onehot_proj=${YOPROJ} arch.y_onehot_scale=${YOSCALE} \
-  arch.logvar_bias_init=${LOGVARBIAS} arch.y_inject=${YINJECT} \
-  ema=${EMA} ema_rate=${EMA_RATE} dual_eval=${DUALEVAL} lr_warmup_steps=${WARMUP} \
+  arch.kl_coef=${BETA} arch.noise_head_expansion=${NHEXP} \
+  ema=${EMA} ema_rate=${EMA_RATE} lr_warmup_steps=${WARMUP} \
   +run_name=${RUN} \
   2>&1 | tee logs/${RUN}.log

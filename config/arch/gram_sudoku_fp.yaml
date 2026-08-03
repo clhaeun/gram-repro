@@ -27,10 +27,9 @@ mlp_t: False
 puzzle_emb_len: 16
 no_ACT_continue: True
 
-# GRAM용 -- 정준 설정 유지 (kl_reduction sum)
+# GRAM용 -- 정준 설정은 코드에 하드코딩 (kl_reduction=sum: losses.py, 2026-08-03 minimal)
 kl_coef: 0.1        # KL 가중치
 kl_balance: 0.8     # KL balancing 비율
-kl_reduction: sum   # L축 reduction. halt_only(71.85%)=sum, lmean_v2(1.8%)=mean
 lprm_coef: 1.0      # 일단 1로 둠
 
 # ---- FPRM 기여1 (use_fp_transformer 외 나머지는 dataclass default 가 이미 활성값이지만

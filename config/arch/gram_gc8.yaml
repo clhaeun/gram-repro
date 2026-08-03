@@ -35,21 +35,11 @@ no_ACT_continue: True
 #
 # L = seq_len + puzzle_emb_len = 28 + 16 = 44.  8x8(80) / 10x10(116) 과 다르므로
 # sum <-> mean 환산 배율이 44 다 (sum 0.5 == mean 22). 아래는 sum 눈금이라 논문값 그대로다.
-kl_coef: 0.5        # 논문 B.2, Graph Coloring 8-vertex
-kl_balance: 0.8     # KL balancing 비율
-kl_reduction: sum   # L축 reduction. 논문 표기 눈금.
+kl_coef: 0.5        # 논문 B.2, Graph Coloring 8-vertex (sum 눈금 = 논문값 그대로)
+kl_balance: 0.8
 lprm_coef: 1.0
-
-# 사수 처방 4: posterior 의 y 를 one-hot 으로 (y 복사 통로 차단).
-# 기본값은 gram.py 의 dataclass 기본과 동일 = 기존 동작. sh 에서 덮어쓴다.
-y_onehot: False
-y_onehot_proj: zeropad
-y_onehot_scale: 1.0
-
-# v2 손잡이 2개. 기본값은 gram.py 의 dataclass 기본과 동일 = 기존 동작 그대로.
-# hydra 가 struct 모드라 여기에 없으면 arch.* override 자체가 거부된다.
-logvar_bias_init: -4.0   # prior/post logvar bias 초기값. -4.0 -> 초기 sigma 0.135
-y_inject: add            # posterior 의 y 주입. add | concat ([z_H;y_emb] -> Linear(2D,D), [I;I] init)
-
+# 최종 설정은 코드에 하드코딩됐다 (2026-08-03 minimal):
+#   kl_reduction=sum (losses.py) / y one-hot zeropad x 0.573 / logvar bias init 0.0 /
+#   y_inject: u_y = z_H + y_emb (gram.py)
 
 noise_head_expansion: 1.5

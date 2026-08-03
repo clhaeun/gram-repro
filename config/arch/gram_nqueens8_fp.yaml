@@ -30,18 +30,15 @@ forward_dtype: bfloat16
 puzzle_emb_len: 16
 no_ACT_continue: True
 
-# GRAM용 -- 정준 설정 유지 (사수 지시: logvar_bias_init -4.0, kl_reduction sum, y_inject add)
+# GRAM용 -- 정준 설정은 2026-08-03 minimal 에서 코드에 하드코딩됐다:
+#   kl_reduction=sum (losses.py) / y one-hot zeropad x 0.573 / logvar bias init 0.0 /
+#   y_inject: u_y = z_H + y_emb (gram.py)
+# (구 주석의 "logvar_bias_init -4.0 정준" 은 final 라운드 확정값 0.0 이전 기록 -- 정정)
 kl_coef: 0.07
 kl_balance: 0.8
-kl_reduction: sum
 lprm_coef: 1.0
 
-y_onehot: False
-y_onehot_proj: zeropad
-y_onehot_scale: 1.0
 
-logvar_bias_init: -4.0
-y_inject: add
 
 noise_head_expansion: 1.5
 

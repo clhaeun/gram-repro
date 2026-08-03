@@ -2,7 +2,7 @@
 # arch config 가 아니라 dataset metadata 에서 온다(pretrain.py:124), 그래서
 # data_paths=[data/nqueens-10] 만 바꾸면 seq_len=100 이 자동으로 들어간다.
 # L = seq_len + puzzle_emb_len = 100 + 16 = 116.  (8x8 은 64 + 16 = 80)
-# kl_reduction 이 mean 이므로 β 눈금은 L 에 무관하다 -- 8x8 의 β 값을 그대로 쓴다.
+# kl_reduction 은 sum 고정(losses.py)이라 β 눈금이 L 에 비례한다 -- β 는 task 별 값이다.
 name: recursive_reasoning.gram@TinyRecursiveReasoningModel_ACTV1
 loss:
   name: losses@ACTLossHead
@@ -33,23 +33,11 @@ forward_dtype: bfloat16
 puzzle_emb_len: 16
 no_ACT_continue: True
 
-# GRAM용
-kl_coef: 0.07       # KL 가중치 (beta) -- swept over {0.045, 0.07, 0.1}
-kl_balance: 0.8     # KL balancing 비율
-kl_reduction: mean  # L축 reduction. 이 실험군의 실효 눈금이다(β 값이 전부 mean 기준).
-                    # sum 은 halt_only Sudoku 전용. env 누락 시 sum 으로 떨어지면 즉사한다.
+# 최종 설정은 코드에 하드코딩됐다 (2026-08-03 minimal):
+#   kl_reduction=sum (losses.py) / y one-hot zeropad x 0.573 / logvar bias init 0.0 /
+#   y_inject: u_y = z_H + y_emb (gram.py)
+kl_coef: 0.045      # KL 가중치 (beta), nq10 final 라운드 값 (sum 눈금; 구 yaml 0.07 은 mean 눈금 sweep 잔재)
+kl_balance: 0.8
 lprm_coef: 1.0
-
-# 사수 처방 4: posterior 의 y 를 one-hot 으로 (y 복사 통로 차단).
-# 기본값은 gram.py 의 dataclass 기본과 동일 = 기존 동작. sh 에서 덮어쓴다.
-y_onehot: False
-y_onehot_proj: zeropad
-y_onehot_scale: 1.0
-
-# v2 손잡이 2개. 기본값은 gram.py 의 dataclass 기본과 동일 = 기존 동작 그대로.
-# hydra 가 struct 모드라 여기에 없으면 arch.* override 자체가 거부된다.
-logvar_bias_init: -4.0   # prior/post logvar bias 초기값. -4.0 -> 초기 sigma 0.135
-y_inject: add            # posterior 의 y 주입. add | concat ([z_H;y_emb] -> Linear(2D,D), [I;I] init)
-
 
 noise_head_expansion: 1.5

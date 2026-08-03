@@ -37,15 +37,11 @@ puzzle_emb_lr: 1e-2
 seed: 0
 min_eval_interval: 0 # when to start the eval
 
-ema: False # use Exponential-Moving-Average
+ema: False # use Exponential-Moving-Average. True 면 raw(non-EMA) 평가도 항상 병행된다
 ema_rate: 0.999 # EMA-rate
-dual_eval: False # with ema, also eval the raw (non-EMA) weights each eval; logged under `_raw`
 freeze_weights: False # If True, freeze weights and only learn the embeddings
 
-# weight decay 예외. 기본 False = 현행 동작(AdamW 단일 param_group)과 bit-identical.
-# hydra 가 struct 모드라 여기에 없으면 override 자체가 거부된다.
-nodecay_y_proj: False      # y_concat_proj.weight 를 weight_decay=0 group 으로
-nodecay_logvar_bias: False # prior/post_logvar_bias 를 weight_decay=0 group 으로
-nodecay_marked: False      # FPRM 이 `_no_weight_decay` 로 마킹한 파라미터를 wd=0 group 으로.
-                           # pretrain.py:98 에 필드는 있었는데 여기 없어서 hydra struct 가
-                           # `nodecay_marked=...` 오버라이드를 거부했다(2026-08-03 29번 추가).
+# FPRM 이 `_no_weight_decay` 로 마킹한 파라미터(fp_transformer 의 α 등)를 wd=0 group 으로.
+# ★ pydantic 필드 추가 = yaml 필드 추가 (CHECKLIST.md 1항): hydra 가 struct 모드라
+#   여기 없으면 override 자체가 거부된다.
+nodecay_marked: False
