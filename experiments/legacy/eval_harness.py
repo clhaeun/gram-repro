@@ -3,9 +3,9 @@
 ★ 상태 (2026-08-03): **결과 산출에서는 은퇴, contract 검증 라이브러리로만 현역.**
   지표 산출은 sweep_harness.py(valid 축)가 맡는다 -- 이쪽 NQueensTask.verify 는
   strict(valid AND consistent)를 정답 기준으로 반환해 논문 헤드라인 축과 다르다.
-  루트에 남는 이유: dataset/verify_nqueens_dataset.py:210 이 `_input_hash` /
-  `NQueensTask` 를 import 해 [12] 항목(빌더-harness 해시/coverage contract)을 검증한다.
-  옮기거나 지우면 그쪽 try/except 에 먹혀 검증이 조용히 SKIP 된다.
+  dataset/verify_nqueens_dataset.py:210 이 `experiments.legacy.eval_harness` 로
+  `_input_hash` / `NQueensTask` 를 import 해 [12] 항목을 검증한다.  지우면
+  그쪽 try/except 에 먹혀 검증이 조용히 SKIP 된다.
 
 Generalises the e1/e3 one-off scripts (which stay untouched) into a single
 entry point with a pluggable task:
@@ -40,7 +40,7 @@ from math import comb
 import numpy as np
 import torch
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from experiments.gram_harness import load_model, load_puzzles, sigma_scale as _sigma_scale_ctx
 

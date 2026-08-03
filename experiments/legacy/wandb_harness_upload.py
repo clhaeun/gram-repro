@@ -37,7 +37,7 @@ from collections import defaultdict
 
 import yaml
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 CKPT_RE = re.compile(r"checkpoints/([^/]+)/([^/]+)/step_(\d+)(\.live)?$")
 RESULTS = "experiments/results/*.json"

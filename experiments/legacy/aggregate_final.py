@@ -12,7 +12,7 @@
 import glob, json, re, os
 import numpy as np
 
-RES = os.path.join(os.path.dirname(__file__), "results")
+RES = os.path.join(os.path.dirname(__file__), "..", "results")
 PAPER = {("nq8", "acc"): (99.7, 0.3), ("nq8", "cov"): (90.3, 1.9),
          ("nq10", "acc"): (89.7, 2.7), ("nq10", "cov"): (57.5, 3.4)}
 FINAL_STEP = {"nq8": 67428, "nq10": 58772}

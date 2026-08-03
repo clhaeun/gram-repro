@@ -20,6 +20,11 @@
 | `diag/` | 진단 스크립트 20종. 각 파일 → REPORT 매핑은 [diag/README.md](diag/README.md) 에 있다. |
 | `gram_legacy.py` | 2026-08-03 정리 직전의 `models/recursive_reasoning/gram.py` 원본 스냅샷 (cp). 정리 diff 의 대조본. |
 | `pretrain_legacy.py` | 같은 시점의 `pretrain.py` 원본 스냅샷 (cp). |
+| `eval_harness.py` | 구 harness (strict 축). **verify_nqueens_dataset.py [12] 가 지금도 import 하는 contract 라이브러리** -- 지우면 검증이 조용히 SKIP. |
+| `aggregate_final.py` | pair final 라운드 집계 (`../results/fin_*.json` 구 포맷 전용, pass_at 필요). REPORT_final_pair_50.md 산출. |
+| `make_paper_figures.py` | 논문 Figure 10/12/15 + Table 1 생성 (7/30 산출분이 reports/figures/ 에 있음). |
+| `wandb_harness_upload.py` | 구 포맷 결과 JSON 의 wandb offline 일괄 업로드. |
+| `eval_checkpoint.py` | (구 repo 루트) checkpoint 에 in-loop evaluate() 재실행 -- harness 축 아님. |
 
 ## 실행
 

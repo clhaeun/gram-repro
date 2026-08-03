@@ -207,7 +207,7 @@ def main():
 
     # --- eval harness contract ---------------------------------------------
     try:
-        from experiments import eval_harness as EH
+        from experiments.legacy import eval_harness as EH
     except Exception as e:  # torch missing etc. -- not a dataset problem
         print(f"  SKIP  [12] eval_harness unavailable ({type(e).__name__})")
     else:
