@@ -39,7 +39,6 @@ min_eval_interval: 0 # when to start the eval
 
 ema: False # use Exponential-Moving-Average. True 면 raw(non-EMA) 평가도 항상 병행된다
 ema_rate: 0.999 # EMA-rate
-freeze_weights: False # If True, freeze weights and only learn the embeddings
 
 # FPRM 이 `_no_weight_decay` 로 마킹한 파라미터(fp_transformer 의 α 등)를 wd=0 group 으로.
 # ★ pydantic 필드 추가 = yaml 필드 추가 (CHECKLIST.md 1항): hydra 가 struct 모드라

@@ -78,11 +78,9 @@ class PretrainConfig(pydantic.BaseModel):
     checkpoint_every_eval: bool = False
     eval_interval: Optional[int] = None
     min_eval_interval: Optional[int] = 0 # when to start eval
-    eval_save_outputs: List[str] = []
 
     ema: bool = False # use Exponential-Moving-Average
     ema_rate: float = 0.999 # EMA-rate
-    freeze_weights: bool = False # If True, freeze weights and only learn the embeddings
 
     # FPRM 모듈이 파라미터에 `_no_weight_decay` 속성으로 wd 예외를 표시한다
     # (fp_transformer 의 input-independent α 등).  기본 False = AdamW 단일 param_group.
@@ -192,18 +190,6 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
         ]
         optimizer_lrs = [
             config.lr
-        ]
-    elif config.freeze_weights:
-        optimizers = [
-            CastedSparseEmbeddingSignSGD_Distributed(
-                model.model.puzzle_emb.buffers(),  # type: ignore
-                lr=0,  # Needs to be set by scheduler
-                weight_decay=config.puzzle_emb_weight_decay,
-                world_size=world_size
-            )
-        ]
-        optimizer_lrs = [
-            config.puzzle_emb_lr
         ]
     else:
         optimizers = [
@@ -402,15 +388,13 @@ def evaluate(
     reduced_metrics = None
 
     with torch.inference_mode():
-        return_keys = set(config.eval_save_outputs)
+        return_keys = set()
         for evaluator in evaluators:
             evaluator.begin_eval()
             return_keys.update(evaluator.required_outputs)
 
         # Run evaluation
         set_ids = {k: idx for idx, k in enumerate(eval_metadata.sets)}
-
-        save_preds = {}
 
         metric_keys = []
         metric_values = None
@@ -442,12 +426,6 @@ def evaluate(
             if rank == 0:
                 print(f"  Completed inference in {inference_steps} steps")
 
-            for collection in (batch, preds):
-                for k, v in collection.items():
-                    if k in config.eval_save_outputs:
-                        save_preds.setdefault(k, [])
-                        save_preds[k].append(v.cpu())  # Move to CPU for saving GPU memory
-
             for evaluator in evaluators:
                 evaluator.update_batch(batch, preds)
 
@@ -467,19 +445,6 @@ def evaluate(
             metric_values[set_id] += torch.stack([metrics[k] for k in metric_keys])
 
             del metrics
-
-        # concatenate save preds
-        save_preds = {k: torch.cat(v, dim=0) for k, v in save_preds.items()}
-
-        # Save preds
-        if config.checkpoint_path is not None and len(save_preds):
-            # Each rank save predictions independently
-            os.makedirs(os.path.dirname(config.checkpoint_path), exist_ok=True)
-            torch.save(
-                save_preds, os.path.join(config.checkpoint_path, f"step_{train_state.step}_all_preds.{rank}")
-            )
-
-        del save_preds
 
         # Reduce to rank 0
         if metric_values is not None:
@@ -690,25 +655,17 @@ def launch(hydra_config: DictConfig):
                 cpu_group=CPU_PROCESS_GROUP)
 
             if RANK == 0 and metrics is not None:
-                # wandb-only mirror under eval/*, plus a token_accuracy alias for the
-                # existing (token-level) `accuracy`.  The printed line below keeps
-                # using the raw metric dict so the stdout format is unchanged.
-                flat = flatten_metrics(metrics)
-                mirror = {f"eval/{k}": v for k, v in flat.items()}
-                for k, v in flat.items():
-                    if k.endswith("/accuracy"):
-                        mirror[f"eval/{k[:-len('accuracy')]}token_accuracy"] = v
-                wandb.log({**metrics, **mirror}, step=train_state.step)
+                wandb.log(metrics, step=train_state.step)
                 print(f"[EVAL @ step {train_state.step}] " + " ".join(f"{k}={v:.4f}" for k, v in sorted(flatten_metrics(metrics).items())), flush=True)
 
             ############ Raw (non-EMA) evaluation at the same step -- ema=True 면 항상.
             # EMA 곡선만 보면 EMA 가 학습 중반에 0% 인 구간에서 run 을 오독한다.
-            # raw pass 는 side-effect free: checkpoint_path/eval_save_outputs 를 비운
+            # raw pass 는 side-effect free: checkpoint_path 를 비운
             # config 사본을 받아 EMA pass 의 산출물을 덮지 못한다.
             if config.ema:
                 if RANK == 0:
                     print("EVALUATE RAW (non-EMA)")
-                raw_config = config.model_copy(update={"checkpoint_path": None, "eval_save_outputs": []})
+                raw_config = config.model_copy(update={"checkpoint_path": None})
                 # The extra forward passes would otherwise advance the torch RNG
                 # (GRAM samples noise every forward), so training after this eval
                 # would diverge from an ema=False run at the same seed.  Snapshot
@@ -729,12 +686,7 @@ def launch(hydra_config: DictConfig):
 
                 if RANK == 0 and metrics_raw is not None:
                     flat_raw = flatten_metrics(metrics_raw)
-                    payload = {f"{k}_raw": v for k, v in flat_raw.items()}
-                    for k, v in flat_raw.items():
-                        if k.endswith("/accuracy"):
-                            payload[f"{k[:-len('accuracy')]}token_accuracy_raw"] = v
-                    mirror_raw = {f"eval/{k}": v for k, v in payload.items()}
-                    wandb.log({**payload, **mirror_raw}, step=train_state.step)
+                    wandb.log({f"{k}_raw": v for k, v in flat_raw.items()}, step=train_state.step)
                     print(f"[EVAL RAW @ step {train_state.step}] " + " ".join(f"{k}_raw={v:.4f}" for k, v in sorted(flat_raw.items())), flush=True)
 
             ############ Checkpointing
