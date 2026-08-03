@@ -23,7 +23,9 @@ sweep_harness.py 를 분기하지 않고 별도 스크립트로 둔다 -- 그쪽
 N-Queens 와 달리 consistent 개념이 없다: 입력이 그래프 자체라 보존할 힌트가 없고,
 valid(전 edge 양끝 다른 색)가 곧 "x 의 해"다.
 
-accuracy(단일시도 valid)는 병기하지만 논문 GC 대응 지표가 아니다.
+진단 지표(valid/pass@k/distinct/prior_single_k0/posterior/num_colors_used/
+비정규화 majority)는 2026-08-03 minimal 정리에서 삭제 --
+필요하면 legacy/gc_harness_legacy.py.
 
 사용법:
     python experiments/gc_harness.py --ckpt-dir <dir> --step step_N.live \
@@ -36,7 +38,6 @@ import json
 import os
 import sys
 from collections import Counter
-from math import comb
 
 import numpy as np
 
@@ -83,18 +84,11 @@ def graph_hash_rows(inputs):
 
 
 def flat_stats(preds, inputs, n):
-    """preds [K, B, L] -> 단일시도 지표.  ② Conflict = conflicts_mean (±std, 논문 2.7±2.1 형식).
-
-    num_colors_used_mean 은 논문 대응 없음 -- 단색 붕괴(모든 노드 같은 색) 감지용
-    진단값이라 계산을 유지한다.
-    """
+    """preds [K, B, L] -> ② Conflict = conflicts_mean (±std, 논문 2.7±2.1 형식)."""
     K, B, L = preds.shape
     r = verify_colorings(preds.reshape(K * B, L), np.tile(inputs, (K, 1)), n)
-    return dict(valid=float(r["valid"].mean()),
-                conflicts_mean=float(r["conflicts"].mean()),
-                conflicts_std=float(r["conflicts"].std()),
-                colors_ok=float(r["colors_ok"].mean()),
-                num_colors_used_mean=float(r["num_colors_used"].mean()))
+    return dict(conflicts_mean=float(r["conflicts"].mean()),
+                conflicts_std=float(r["conflicts"].std()))
 
 
 def coverage_at_N(cand, inputs, n, totals):
@@ -135,32 +129,13 @@ def coverage_at_N(cand, inputs, n, totals):
     return res
 
 
-# ---------------------------------------------------------------------------
-# 진단용 (논문 대응 없음).  pass_at, distinct_at_N, prior_single_k0, posterior,
-# num_colors_used(단색 붕괴 감지 -- 계산 유지), 비정규화 majority.
-# ---------------------------------------------------------------------------
-
-def pass_at_k(num_correct, n_samples, k):
-    """진단용 불편추정량 (sweep_harness.py 와 동일). 논문 지표 아님."""
-    if n_samples - num_correct < k:
-        return 1.0
-    return 1.0 - comb(n_samples - num_correct, k) / comb(n_samples, k)
-
-
 METRIC_DEFS = {
-    "논문지표": "② prior_all_samples.conflicts_mean(±std) ③ coverage_at_20 "
-              "④ majority_at_N_valid_canonical ⑤ verifier_selected_at_N_valid.  "
-              "나머지는 진단용(논문 대응 없음).",
-    "prior_all_samples.valid": "진단(GC 는 accuracy 대신 ② conflict 를 보고). 모든 edge 양끝이 다른 색 + 전 노드가 색 토큰(3..5). pass@1 과 동일.",
-    "prior_all_samples.conflicts_mean/std": "★② 논문 GC 헤드라인(8-vertex 2.7±2.1, 낮을수록 좋음). N샘플 전체의 위반 edge 수 분포.",
-    "prior_all_samples.num_colors_used_mean": "진단. 단색 붕괴(전 노드 같은 색) 감지용.",
-    "posterior": "진단. 정답 y 를 본 경로. prior 와 다른 축.",
-    "pass_at": "진단. N 중 k개를 뽑아 1개 이상 valid 일 확률(불편추정량).",
-    "majority_at_N_valid": "진단. N샘플 최빈 보드 1개(동률 첫 등장)를 valid 채점. GC 는 distinct@20≈N 이라 사실상 무작위 1개 -- canonical 판을 쓸 것.",
-    "majority_at_N_valid_canonical": "★④ 논문 §2.3 selection 방법 1. 색 치환 동치류를 canonical 화로 합친 뒤의 최빈 1개를 valid 채점. 이쪽이 진짜 다수결.",
-    "verifier_selected_at_N_valid": "★⑤ 논문 §2.3 방법 2 = LPRM best-of-N. 모델 lrpm 점수 최고 샘플 1개를 valid 채점. 정답 미사용.",
-    "distinct_at_N_mean": "진단. N샘플 중 서로 다른 보드 수(다양성, 정확도 아님).",
-    "coverage_at_20": "★③ 논문 coverage(85.8±0.5). found = valid 샘플의 first-appearance canonical unique 수, "
+    "prior_all_samples.conflicts_mean/std": "② 논문 GC 헤드라인(8-vertex 2.7±2.1, 낮을수록 좋음). "
+                                            "N샘플 전체의 위반 edge 수 분포.",
+    "majority_at_N_valid_canonical": "④ 논문 §2.3 selection 방법 1. 색 치환 동치류를 canonical 화로 "
+                                     "합친 뒤의 최빈 1개를 valid 채점 (비정규화 최빈은 색 치환 때문에 사실상 무작위 선택).",
+    "verifier_selected_at_N_valid": "⑤ 논문 §2.3 방법 2 = LPRM best-of-N. 모델 lrpm 점수 최고 샘플 1개를 valid 채점. 정답 미사용.",
+    "coverage_at_20": "③ 논문 coverage(85.8±0.5). found = valid 샘플의 first-appearance canonical unique 수, "
                       "total = sidecar per-graph canonical 해 수. N-Queens 와 달리 consistent 조건 없음(입력에 힌트가 없다).",
 }
 
@@ -180,11 +155,11 @@ def selftest(data_dir, sidecar_path, n):
     print(f"[selftest] puzzles={B} seq={L} n={n}  sidecar 매칭실패={miss}  total 평균={totals[totals>0].mean():.2f}")
     assert miss == 0, "graph hash 가 sidecar 와 안 맞는다"
 
-    # (a) 라벨 주입 -> conflict 0, valid 1.0
+    # (a) 라벨 주입 -> conflict 0
     lab = labels[None]                              # [1, B, L]
     st = flat_stats(lab, inputs, n)
-    print(f"[a] 라벨 주입      : valid={st['valid']:.6f} conflicts={st['conflicts_mean']:.6f}  (기대 1.0 / 0.0)")
-    assert st["valid"] == 1.0 and st["conflicts_mean"] == 0.0
+    print(f"[a] 라벨 주입      : conflicts={st['conflicts_mean']:.6f}  (기대 0.0)")
+    assert st["conflicts_mean"] == 0.0
 
     # (b) 무작위 색 -> conflict ~= edges/3
     rng = np.random.default_rng(0)
@@ -256,33 +231,20 @@ def main():
 
     pri = rollout(net, inputs, labels, K=args.N, sigma_scale_=args.sigma_scale,
                   mode="prior", seed=args.seed, verbose=False)
-    post = rollout(net, inputs, labels, K=1, sigma_scale_=args.sigma_scale,
-                   mode="posterior", seed=args.seed, verbose=False)
 
     cand, v = pri["preds"], pri["v"]
     res = {"checkpoint": os.path.join(args.ckpt_dir, args.step), "n": B, "N": args.N,
            "seed": args.seed, "sigma_scale": args.sigma_scale, "tag": args.tag}
 
-    res["prior_all_samples"] = flat_stats(cand, inputs, args.n)     # ② Conflict = .conflicts_mean
-    res["prior_single_k0"] = flat_stats(cand[:1], inputs, args.n)   # 진단
-    res["posterior"] = flat_stats(post["preds"], inputs, args.n)    # 진단
+    res["prior_all_samples"] = flat_stats(cand, inputs, args.n)     # ② Conflict
 
-    # 진단: pass@k
-    vb = verify_colorings(cand.reshape(args.N * B, -1), np.tile(inputs, (args.N, 1)), args.n)
-    valid = vb["valid"].reshape(args.N, B).T
-    nc = valid.sum(1)
-    res["pass_at"] = {str(k): float(np.mean([pass_at_k(int(c), args.N, k) for c in nc]))
-                      for k in (1, 5, 10, 20) if k <= args.N}
-
-    # ④ canonical majority / ⑤ verifier(LPRM best-of-N) / 진단: 비정규화 majority, distinct
-    maj, sel, dis, majc = [], [], [], []
+    # ④ canonical majority / ⑤ verifier (LPRM best-of-N)
+    sel, majc = [], []
     for b in range(B):
         rows = cand[:, b, :]
-        maj.append(majority_row(rows))
         sel.append(rows[int(np.argmax(v[:, b]))])       # ⑤ v = lrpm_head 점수 [N, B]
-        dis.append(len({tuple(r) for r in rows}))
         # ④ canonical majority: 색 치환된 같은 해를 한 후보로 합친 뒤 최빈을 뽑는다.
-        # GC 는 distinct@20 이 20 에 붙어 있어 원본 토큰 최빈은 사실상 무작위 1개다.
+        # 원본 토큰 최빈은 색 치환 때문에 사실상 무작위 1개라 논문 지표가 아니다.
         # canonical 화는 색만 재라벨하므로 validity 를 보존한다 -> canonical 보드를 그대로 채점.
         cols = rows[:, :args.n]
         okc = ((cols >= COLOR0) & (cols <= COLOR0 + 2)).all(-1)
@@ -294,24 +256,20 @@ def main():
             majc.append(row)
         else:
             majc.append(rows[0])                                # 색토큰이 하나도 없으면 아무거나(invalid)
-    maj, sel, majc = np.stack(maj), np.stack(sel), np.stack(majc)
-    res["majority_at_N_valid"] = float(verify_colorings(maj, inputs, args.n)["valid"].mean())
+    sel, majc = np.stack(sel), np.stack(majc)
     res["majority_at_N_valid_canonical"] = float(verify_colorings(majc, inputs, args.n)["valid"].mean())
     res["verifier_selected_at_N_valid"] = float(verify_colorings(sel, inputs, args.n)["valid"].mean())
-    res["distinct_at_N_mean"] = float(np.mean(dis))
-    res["puzzles_with_ge1_valid"] = float((nc > 0).mean())
 
-    res["coverage_at_20"] = coverage_at_N(cand, inputs, args.n, totals)
+    res["coverage_at_20"] = coverage_at_N(cand, inputs, args.n, totals)     # ③
     res["metric_defs"] = METRIC_DEFS
 
-    p, q, c = res["prior_all_samples"], res["posterior"], res["coverage_at_20"]
+    p, c = res["prior_all_samples"], res["coverage_at_20"]
     print(f"{res['checkpoint']}")
-    print(f"  prior  conflict={p['conflicts_mean']:.3f}±{p['conflicts_std']:.3f}  valid={p['valid']:.4f}")
-    print(f"  post   conflict={q['conflicts_mean']:.3f}±{q['conflicts_std']:.3f}  valid={q['valid']:.4f}")
+    print(f"  prior  conflict={p['conflicts_mean']:.3f}±{p['conflicts_std']:.3f}")
     print(f"  coverage@{args.N}={c['coverage']:.4f} (found {c['found_mean']:.2f}/{c['total_mean']:.2f}, "
-          f"gt_total={c['n_found_gt_total']})  pass@k={res['pass_at']}")
-    print(f"  maj@{args.N}={res['majority_at_N_valid']:.4f} vsel@{args.N}={res['verifier_selected_at_N_valid']:.4f} "
-          f"dist@{args.N}={res['distinct_at_N_mean']:.2f}")
+          f"gt_total={c['n_found_gt_total']})")
+    print(f"  maj_canon@{args.N}={res['majority_at_N_valid_canonical']:.4f} "
+          f"vsel@{args.N}={res['verifier_selected_at_N_valid']:.4f}")
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w") as f:
