@@ -113,7 +113,6 @@ class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
         self.norm_eps = config.rms_norm_eps
 
     def forward(self, cos_sin: CosSin, hidden_states: torch.Tensor) -> torch.Tensor:
-        # B, L, D = hidden_states.shape
         # Post Norm
         if self.config.mlp_t:
             hidden_states = hidden_states.transpose(1,2)
