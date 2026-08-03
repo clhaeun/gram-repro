@@ -1,0 +1,65 @@
+# gram_nqueens10.yaml 의 사본 + FPRM 기여1(pre-norm + residual scaling) 활성.
+# 기존 gram_nqueens10.yaml 은 손대지 않는다 -- 50번 baseline(nq10_repro_s0/s1) 재현 축 보존.
+# base 대비 diff 는 파일 하단의 FPRM 블록 뿐이다 (kl_coef 0.045 포함 전부 동일).
+#
+# N-Queens 10x10.  seq_len 은 arch config 가 아니라 dataset metadata 에서 온다
+# (pretrain.py), 그래서 data_paths=[data/nqueens-10] 만 바꾸면 seq_len=100 이 들어간다.
+# L = seq_len + puzzle_emb_len = 100 + 16 = 116.  (8x8 은 64 + 16 = 80)
+# kl_reduction 은 sum 고정(losses.py)이라 β 눈금이 L 에 비례한다 -- β 는 task 별 값이다.
+name: recursive_reasoning.gram@TinyRecursiveReasoningModel_ACTV1
+loss:
+  name: losses@ACTLossHead
+  loss_type: stablemax_cross_entropy
+
+halt_exploration_prob: 0.1
+halt_max_steps: 16
+
+# GRAM's (T, K): T = H_cycles outer transitions, K = L_cycles inner refinements
+H_cycles: 3
+L_cycles: 4
+
+H_layers: 0
+L_layers: 2
+
+hidden_size: 512
+num_heads: 8
+expansion: 4
+
+puzzle_emb_ndim: ${.hidden_size}
+
+# N-Queens uses the attention core: the sudoku-only mlp_t exception is off here,
+# and positions are encoded with rope rather than being dropped.
+mlp_t: False
+pos_encodings: rope
+forward_dtype: bfloat16
+
+puzzle_emb_len: 16
+no_ACT_continue: True
+
+# 최종 설정은 코드에 하드코딩됐다 (2026-08-03 minimal):
+#   kl_reduction=sum (losses.py) / y one-hot zeropad x 0.573 / logvar bias init 0.0 /
+#   y_inject: u_y = z_H + y_emb (gram.py)
+kl_coef: 0.045      # KL 가중치 (beta), nq10 final 라운드 값 (sum 눈금) -- baseline 과 동일
+kl_balance: 0.8
+lprm_coef: 1.0
+
+noise_head_expansion: 1.5
+
+# ---- FPRM 기여1 (use_fp_transformer 외 나머지는 dataclass default 가 이미 활성값이지만
+#      사후 추적을 위해 전부 명시한다) --------------------------------------------
+use_fp_transformer: true
+norm_type: pre-norm
+residual_scale: fixed
+alpha_1_init: 0.75
+alpha_2_init: 0.25
+outer_only: false
+conv_type: none
+norm_placement: none            # FPRM Appendix Table 6 확인값 (FPRM/Looped Transformer 모두 none)
+normalize_input_injection: false  # 코드 전용 knob, 논문 미언급 -- false 유지
+# causal 은 여기 쓰지 마라: pretrain.py create_model 이 causal=False 를 직접 주입해서
+# yaml 에도 있으면 dict() 중복 키워드로 즉사한다 (seq_len/vocab_size 와 같은 부류).
+#
+# lr/wd 는 run config 쪽이며 baseline 과 동일한 lr 1e-4 / wd 1.0 을 쓴다 (A3' 계열).
+#   근거: FPRM Table 5 Maze 가 pre-norm + residual scaling 을 lr 1e-4 / wd 1.0 에서 쓴다.
+#   wd 인하는 pre-norm 의 요구사항이 아니다.  8x8 에서 1e-3/1e-3 은 A1 acc 0.0087,
+#   A2 NaN 으로 죽었다 (GRAM 은 TRM/FPRM 에 없는 KL 항이 sum 눈금이라 초기 kl_loss ~17,000).
