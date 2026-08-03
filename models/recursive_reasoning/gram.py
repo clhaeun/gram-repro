@@ -234,11 +234,17 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
 
     def _y_embeddings(self, labels):
+        # 사수 처방 4 (posterior 의 y-copy 통로 차단): y 는 학습된 embedding 조회가 아니라
+        # one-hot 을 zeropad 로 hidden_size 에 얹는다.  파라미터 0개, state_dict 무영향.
+        # 0.573 = 학습된 embed_tokens 노름(12.97) / ‖z_H‖(22.63) 실측 비율.
+        # one-hot 은 노름이 고정이라 학습으로 못 줄이므로 처음부터 맞춘 값.
         labels = torch.where(labels==IGNORE_LABEL_ID, 0, labels)
-        embedding = self.embed_tokens(labels.to(torch.int32))
+        oh = F.one_hot(labels.to(torch.int64), num_classes=self.config.vocab_size)
+        embedding = F.pad(oh.to(self.forward_dtype),
+                          (0, self.config.hidden_size - self.config.vocab_size))
         if self.puzzle_emb_len > 0:
             embedding = F.pad(embedding, (0, 0, self.puzzle_emb_len, 0))
-        return self.embed_scale * embedding
+        return self.embed_scale * 0.573 * embedding
 
 
     def kl_loss(self, mu_q, logvar_q, mu_p, logvar_p):
