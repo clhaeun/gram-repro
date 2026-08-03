@@ -10,7 +10,7 @@ one row per consistent solution, and each row is its own group.
 
 ``sidecar_{n}.json`` maps each input hash to its split, clues, and the FULL set
 of solutions consistent with it -- ``experiments/eval_harness.py`` (coverage@K)
-and ``experiments/diag/diag_bucket.py`` read it.  Solutions are column encodings:
+and ``experiments/legacy/diag/diag_bucket.py`` read it.  Solutions are column encodings:
 ``solution[r] = c``.  The hash is sha1 of the flat uint8 token board, [:16].
 """
 

@@ -22,8 +22,8 @@ import sys
 import numpy as np
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-# experiments/diag/ 로 내려왔다: repo root(pretrain), experiments/(gram_harness), 그리고 여기
-sys.path[:0] = [os.path.dirname(os.path.dirname(_HERE)), os.path.dirname(_HERE), _HERE]
+# experiments/legacy/diag/ 로 내려왔다: repo root(pretrain), experiments/(gram_harness), 그리고 여기
+sys.path[:0] = [os.path.dirname(os.path.dirname(os.path.dirname(_HERE))), os.path.dirname(os.path.dirname(_HERE)), _HERE]
 import gram_harness as H  # noqa: E402
 
 

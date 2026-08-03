@@ -12,12 +12,12 @@ Metrics per K: single(=K1), pass@K (any candidate correct), majority@K
 import argparse, json, os, sys
 from collections import Counter
 import numpy as np, torch
-# experiments/diag/ 로 한 단계 내려왔으므로 repo root 는 부모의 부모의 부모다
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# experiments/legacy/diag/ 로 내려왔으므로 repo root 는 부모의 부모의 부모의 부모다
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 from experiments.eval_harness import sample_dataset
 from experiments.gram_harness import load_model
 from evaluators.nqueens import verify_boards
-from experiments.diag.diag_posterior_prior import load_test
+from experiments.legacy.diag.diag_posterior_prior import load_test
 
 
 def metrics_under(correct, cand, ks):

@@ -14,8 +14,8 @@ import sys
 
 import numpy as np
 
-# experiments/diag/ 로 한 단계 내려왔으므로 repo root 는 부모의 부모의 부모다
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# experiments/legacy/diag/ 로 내려왔으므로 repo root 는 부모의 부모의 부모의 부모다
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
 from experiments.gram_harness import load_model, rollout  # noqa: E402
 from evaluators.nqueens import verify_boards  # noqa: E402
