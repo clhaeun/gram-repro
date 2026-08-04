@@ -1,7 +1,8 @@
 # REPORT_final_pair_50 — pair 확장 데이터 최종 라운드 집계 (2026-08-02 23:31 마감)
 
 데이터: pair 확장 (`data/nqueens-{8,10}`, test = nq8 1,270행 / nq10 19,220행).
-축 규약: **헤드라인 = 최종 step × EMA** (nq8 67,428 / nq10 58,772), run 값 = harness
+축 규약: **헤드라인 = 최종 step × EMA** (nq8 67,428 / nq10 138,534 — §2 정정 참조,
+구 기준 58,772 는 §2a), run 값 = harness
 seed 0/1 평균, mean±std 는 학습 seed 3개(또는 가용 수)에 대해. 결과 40건 전부
 `fin_*.json` 으로 즉시 커밋됨. 이전 v5h/v6h 32건은 **-uniq 조건**(test 입력당 1행)이라
 직접 비교 금지 — 별도 보관.
@@ -22,7 +23,59 @@ seed 0/1 평균, mean±std 는 학습 seed 3개(또는 가용 수)에 대해. �
   86.8 vs 논문 90.3 의 3.5pp 는 상한이 아니라 실제 미회수분.
 - accuracy 는 논문 재현권(99.4±0.5 vs 99.7±0.3, ±겹침).
 
-## 2. 10×10 (add arm, 3-seed 완비)
+## 2. 10×10 — ★ A0 기준값 정정 (사수 지시 2026-08-04): `nq10_repro_s0/s1`
+
+A0 기준값을 논문 예산 재현 run(990ep, 최종 step **138,534**)으로 교체한다.
+harness 는 2차 최소화 신판 `sweep_harness.py` (지표 4종, N=20, hseed 0/1 평균 —
+hseed 편차 최대 0.5pp). **구판 fin_* 지표(단일시도 strict, pair coverage 등)와
+눈금이 달라 §2a 구 기준값과 직접 비교 금지.**
+
+최종 step 138,534 × pair 축 × hseed 0/1 평균, 2-seed(s0/s1) mean±std:
+
+| 지표 | EMA ★헤드라인 | live 병기 | 논문 |
+|---|---|---|---|
+| prior 전샘플 valid | 74.2±31.1‡ | 83.8±0.5 | **89.7±2.7** |
+| coverage@20 micro(행) | 80.9±7.9 | 83.9±0.1 | **57.5±3.4** |
+| coverage@20 macro(퍼즐) | 93.8±4.3 | 95.5±0.5 | — |
+| majority@20 valid | 96.9±4.3 | 98.5±1.5 | — |
+| verifier@20 valid | 81.3±24.5 | 95.2±4.5 | — |
+| nqueens/queen_count_mean | 9.60±0.40 | 9.61±0.18 | — |
+
+run × step × 가중치 전개 (단일시도 / cov micro / cov macro / majority / verifier / queen_cnt):
+
+| run | step | 가중치 | 데이터축 | 단일시도 | cov micro | cov macro | maj | vsel | queen_cnt |
+|---|---|---|---|---|---|---|---|---|---|
+| s0 | 138,534 최종=EMA정점 | EMA | pair | 96.22 | 86.52 | 96.86 | 99.97 | 98.58 | 9.881 |
+| s0 | 138,534 | live | pair | 84.12 | 83.96 | 95.79 | 99.56 | 98.39 | 9.483 |
+| s0 | 134,336 raw정점 | EMA | pair | 96.01 | 86.49 | 96.80 | 99.94 | 98.58 | 9.882 |
+| s0 | 134,336 | live | pair | 93.14 | 85.19 | 96.03 | 99.63 | 98.36 | 9.814 |
+| s1 | 138,534 최종=raw정점 | EMA‡ | pair | 52.17 | 75.30 | 90.72 | 93.82 | 63.99 | 9.311 |
+| s1 | 138,534 | live | pair | 83.44 | 83.76 | 95.15 | 97.51 | 92.04 | 9.730 |
+| s1 | 67,168 EMA정점 | EMA | pair | 88.55 | 85.68 | 96.53 | 99.30 | 91.05 | 9.817 |
+| s1 | 67,168 | live | pair | 49.63 | 74.90 | 89.47 | 88.26 | 77.80 | 9.804 |
+
+- ‡ **s1 은 최종 step 에서 EMA 가 live 대비 비정상적으로 낮다** (52.2 vs 83.4 —
+  in-loop 곡선상 88k~126k EMA≈0 붕괴 후 회복 중 상태). EMA ★ 열의 ±31.1 은 이
+  한 run 이 지배 — 사실 표기만, 별도 탐지 없음.
+- queen_count_mean 은 in-loop eval 로그(`[EVAL @ step]`/`[EVAL RAW @ step]`)에서
+  추출 (harness 재계산 아님).
+- 정점 병기: s0 은 정점=최종 (raw정점 134,336 도 동급). s1 EMA 정점 67,168 은
+  88.6 으로 최종(52.2)보다 훨씬 높다 — 정점 이후 EMA 축이 내려앉는 패턴
+  (REPORT_ema_collapse.md 계열).
+- 검산: n_found_gt_total 은 16건 중 14건에서 0, live 축 2건에서 미소 초과
+  (s0@134,336 live 2행, s1@67,168 live 14행 / 38,440 행-평가) — sidecar 해 수
+  과소 등재 가능성, coverage 에 유의미한 영향 없음.
+- coverage micro 는 논문 57.5±3.4 를 크게 상회 (83.9±0.1 live) — 논문 coverage 의
+  측정 절차(축/절단) 차이 가능성 있음, 사실 병기.
+- 각주: 학습(s0/s1)은 구 ema.py(bias correction 포함), 평가는 신 ema.py(ed6e3e2,
+  TRM 원본). 138k step 예산에서 bias correction 효과는 잔존 init 0.0001% 로 무시
+  가능 (사수 확인 2026-08-04).
+- **참고 행: `nq10_repro_s2` — crash 미완주, 기준값에서 제외.** 마지막 eval
+  step 58,772 (in-loop EMA strict 0.6737 / raw 0.6056), 마지막 train step 61,400
+  (08-04 05:40 리부트). seed 1개 방침으로 재학습 중단 (사수 지시 2026-08-04).
+  체크포인트는 `nq10_repro_s2_crashed0804/` 보존.
+
+## 2a. 구 기준 기록 — `nq10_final_add` 3-seed (420ep, 최종 58,772; §2 로 대체됨)
 
 catnd arm 은 최종 설정(y_inject=add 하드코딩)에 없는 arm 이라 논문 대비 표에서
 제외 — §2b 탐색 라운드 기록으로 이동 (사수 지시 2026-08-04).
