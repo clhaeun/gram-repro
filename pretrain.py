@@ -638,10 +638,9 @@ def launch(hydra_config: DictConfig):
             if RANK == 0:
                 print("EVALUATE")
             if config.ema:
-                print("SWITCH TO EMA (bias-corrected)")
+                print("SWITCH TO EMA")
                 train_state_eval = copy.deepcopy(train_state)
-                # bias-corrected EMA: removes the surviving mu^step * w0 init term
-                train_state_eval.model = ema_helper.ema_copy(train_state_eval.model, step=train_state.step)
+                train_state_eval.model = ema_helper.ema_copy(train_state_eval.model)
             else:
                 train_state_eval = train_state
             train_state_eval.model.eval()
@@ -693,7 +692,7 @@ def launch(hydra_config: DictConfig):
             if RANK == 0:
                 print("SAVE CHECKPOINT")
             if RANK == 0 and (config.checkpoint_every_eval or (_iter_id == total_iters - 1)):
-                save_train_state(config, train_state_eval)                       # step_N = (bias-corrected) EMA
+                save_train_state(config, train_state_eval)                       # step_N = EMA
                 if config.ema:
                     # also persist the raw live (non-EMA) SGD weights, so EMA
                     # effects can be separated from path effects post-hoc.
