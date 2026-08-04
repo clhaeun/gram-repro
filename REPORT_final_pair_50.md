@@ -132,7 +132,37 @@ y_inject=concat(no-decay) 탐색 arm. 최종 설정에 채택되지 않았고 mi
 5. **harness seed 편차는 무시 가능** (strict 최대 0.2pp) — 편차 축은 학습 seed.
 6. 학습 seed 편차가 nq10 에서 큼 (add ±13~14pp). 논문 ±2.7 과 대비.
 
-## 4. 남은 것
+## 5. GC-8 논문 예산 5K 재현 — `gc8_repro_s0/s1/s2` (Table 7 대조, 2026-08-04)
+
+학습: EPOCHS=5000 EVALINT=250, 총 step **9,400** (지시문 45,540 은 실측과 상이 —
+groups 1,445 × 5,000 / 768 = 9,407 진행바, 저장 눈금 9,400). s0 은 사수측 launch
+(root 소유), s1/s2 는 50번 launch. **셋 다 신 ema.py(ed6e3e2, bias correction 없음)
+로 학습.** harness = 신판 gc_harness (canonical, selftest 4종 PASS), 최종 step ×
+{EMA, live} × hseed 0/1 평균, 3-seed mean±std:
+
+| 지표 | EMA ★헤드라인 | live 병기 | 논문 Table 7 |
+|---|---|---|---|
+| conflict (mean) | 8.32±2.35§ | 2.31±0.23 | **2.7±2.1** |
+| coverage@20 (canonical) | 0.05±0.04§ | 15.38±5.79 | **85.8±0.5** |
+| majority@20 canonical | 0.00±0.00§ | 7.12±3.32 | — |
+| verifier@20 | 0.00±0.00§ | 8.37±2.72 | — |
+
+- § **EMA 축은 3-seed 전부 붕괴 — run 병리가 아니라 산술적 필연.** 9,400 step ×
+  mu 0.9999 ⇒ shadow 에 init 이 mu^9400 = **39.1%** 잔존. 신 ema.py 에는 이 항을
+  제거하던 bias correction 이 없다 (구 ema.py 였다면 (shadow−mu^t·w0)/(1−mu^t) 로
+  제거). nq10 138k step(잔존 1e-6)과 달리 GC 5K 예산에서는 "최종 step × EMA"
+  헤드라인이 성립하지 않는다 — 사실 병기.
+- 교차검산: in-loop `[EVAL @ 9400]` s1 conflicts_mean 8.22 ↔ harness EMA 8.13 (정합).
+- live 축: conflict 2.31±0.23 은 논문 2.7±2.1 재현권. coverage 15.4±5.8 은 논문
+  85.8±0.5 대비 대미달.
+- **별도 표기 — 논문 예산 6.4배** (`gc8_v5_add_b0_s0`, 32,000ep = 60,192 step,
+  구 ema.py 학습, 신판 gc_harness 재실측 hseed 0/1 평균):
+  EMA conflict 0.034 / cov **90.2** / maj 99.8 / vsel 98.4;
+  live conflict 0.179 / cov 79.2 / maj 95.5 / vsel 93.7.
+  6.4배 예산에서는 coverage 가 논문 수준(85.8)을 상회 — 5K 미달이 예산 축 문제임을
+  시사 (논문은 5K 로 85.8 주장 → 절차 차이 여지, 사실 병기).
+
+## 6. 남은 것
 
 - 29번: nq8_final_add_s2, nq8_final_catnd_s0/s1/s2 → 합류 시 nq8 3-seed / catnd 표 갱신.
 - FPRM arm (A3′ → A1+A2, 1차 판정 diag/z_h_norm boundedness) 은 이 표 마감 후
