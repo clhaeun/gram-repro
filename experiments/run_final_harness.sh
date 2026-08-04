@@ -1,4 +1,16 @@
 #!/bin/bash
+# ############################################################################
+# DEPRECATED -- run_repro_harness.sh 를 쓸 것.
+#
+# 이 스크립트는 현행 코드로 실행 불가다 (고치지 않고 표시만 남긴다):
+#   1. `source ~/miniconda3/bin/activate gram`  -- 34번에 ~/miniconda3 가 없다.
+#      현행 환경은 ~/venv-gram (run_repro_harness.sh 는 ~/venv-gram/bin/python 사용).
+#   2. `python experiments/sweep_harness.py`    -- `python` 실행파일이 PATH 에 없다.
+#      절대경로 ~/venv-gram/bin/python 을 써야 한다.
+#   3. `--tag "finh_..."`                       -- sweep_harness.py 에 --tag 인자가 없다.
+#      현행 인자: --ckpt-dir --step --data --n --N --seed --sigma-scale --mu-scale
+#                 --sidecar --halt-max-steps --out.  argparse 가 즉시 죽는다.
+# ############################################################################
 # nq8_final_* harness 28 건.  GPU 3장(5/6/7)에 shard 로 나눠 돈다.
 #
 #   catnd_s0 : 67428(최종) / 50571(EMA정점) / 44952(raw정점)  x {EMA,.live} x hseed{0,1} = 12
