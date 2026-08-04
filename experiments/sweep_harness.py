@@ -81,10 +81,15 @@ def main():
     ap.add_argument("--sigma-scale", type=float, default=1.0)  # Table 3b: 0 = "guide only"
     ap.add_argument("--mu-scale", type=float, default=1.0)     # Table 3b: 0 = "stochasticity only"
     ap.add_argument("--sidecar", default="data/nqueens-8/sidecar_8.json")
+    # N_sup 외삽용. None = 오버라이드 없음 (체크포인트 학습값 그대로).
+    # eval 에선 gram.py 의 halted = (new_steps >= halt_max_steps) 만 남으므로 N_sup = 이 값.
+    ap.add_argument("--halt-max-steps", type=int, default=None)
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
     net, _ = load_model(args.ckpt_dir, args.step)
+    if args.halt_max_steps is not None:
+        net.model.config.halt_max_steps = args.halt_max_steps   # inner 와 공유 객체
     inputs = np.load(f"{args.data}/all__inputs.npy").astype(np.int64)
     labels = np.load(f"{args.data}/all__labels.npy").astype(np.int64)
     B = len(inputs)
@@ -94,7 +99,8 @@ def main():
     cand, v = pri["preds"], pri["v"]                           # [N, B, L], [N, B]
 
     res = {"checkpoint": os.path.join(args.ckpt_dir, args.step), "n": B, "N": args.N,
-           "seed": args.seed, "sigma_scale": args.sigma_scale, "mu_scale": args.mu_scale}
+           "seed": args.seed, "sigma_scale": args.sigma_scale, "mu_scale": args.mu_scale,
+           "halt_max_steps": net.model.config.halt_max_steps}
     res["prior_all_samples"] = flat_stats(cand, inputs, args.n)                  # ①
     maj = np.stack([majority_row(cand[:, b, :]) for b in range(B)])              # ④
     sel = np.stack([cand[int(np.argmax(v[:, b])), b, :] for b in range(B)])      # ⑤ LPRM best-of-N

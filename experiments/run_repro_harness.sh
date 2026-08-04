@@ -12,7 +12,7 @@ for W in ema live; do
   for HS in 0 1; do
     O=experiments/results/rp_${RUN}_step${STEP}_${W}_s${HS}.json
     [ -f "$O" ] && { echo "[skip] $O"; continue; }
-    CUDA_VISIBLE_DEVICES=$GPU /opt/conda/bin/python experiments/sweep_harness.py \
+    CUDA_VISIBLE_DEVICES=$GPU ~/venv-gram/bin/python experiments/sweep_harness.py \
       --ckpt-dir "$CK" --step "$SF" \
       --data data/nqueens-10/test --sidecar data/nqueens-10/sidecar_10.json \
       --n 10 --N 20 --seed "$HS" --out "$O" || echo "!!! FAIL $RUN $STEP $W hs$HS"
