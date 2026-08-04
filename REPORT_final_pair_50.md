@@ -70,10 +70,15 @@ run × step × 가중치 전개 (단일시도 / cov micro / cov macro / majority
 - 각주: 학습(s0/s1)은 구 ema.py(bias correction 포함), 평가는 신 ema.py(ed6e3e2,
   TRM 원본). 138k step 예산에서 bias correction 효과는 잔존 init 0.0001% 로 무시
   가능 (사수 확인 2026-08-04).
-- **참고 행: `nq10_repro_s2` — crash 미완주, 기준값에서 제외.** 마지막 eval
-  step 58,772 (in-loop EMA strict 0.6737 / raw 0.6056), 마지막 train step 61,400
-  (08-04 05:40 리부트). seed 1개 방침으로 재학습 중단 (사수 지시 2026-08-04).
-  체크포인트는 `nq10_repro_s2_crashed0804/` 보존.
+- **참고 행: `nq10_repro_s2` — crash 미완주 (마지막 harness 실측 step 125,940),
+  기준값에서 제외.** harness 실측 8건 = `fin_nq10_repro_s2_step{104950,125940}_{ema,live}_s{0,1}.json`
+  (92b2981). hseed 0/1 평균 (prior / maj / vsel / cov micro):
+  125,940 EMA 89.1/99.6/95.0/86.4 · live 51.0/86.5/87.1/69.1;
+  104,950 EMA 95.1/99.9/94.5/88.0 · **live 0.0/0.0/0.0/0.0 (live 축 붕괴 —
+  EMA 는 정상, §2 s1 의 EMA 붕괴와 거울상)**.
+  seed 1개 방침으로 재학습 중단 (사수 지시 2026-08-04). 50번 재시도 사본
+  `nq10_repro_s2_crashed0804/`(58,772 에서 08-04 05:40 리부트로 중단)은 별개 —
+  위 실측과 혼동 금지.
 
 ## 2a. 구 기준 기록 — `nq10_final_add` 3-seed (420ep, 최종 58,772; §2 로 대체됨)
 
