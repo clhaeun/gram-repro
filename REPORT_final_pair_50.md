@@ -79,6 +79,8 @@ run × step × 가중치 전개 (단일시도 / cov micro / cov macro / majority
   seed 1개 방침으로 재학습 중단 (사수 지시 2026-08-04). 50번 재시도 사본
   `nq10_repro_s2_crashed0804/`(58,772 에서 08-04 05:40 리부트로 중단)은 별개 —
   위 실측과 혼동 금지.
+- `run_harness_nq10_29.sh` 는 24건을 계획했으나 결과는 8건. `nq10_fp_a3p_s1` 12건과
+  raw 정점 88158 은 미측정. checkpoint 는 남아 있어 재측정 가능.
 
 ## 2a. 구 기준 기록 — `nq10_final_add` 3-seed (420ep, 최종 58,772; §2 로 대체됨)
 
