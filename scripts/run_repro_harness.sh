@@ -2,9 +2,9 @@
 # nq10_repro harness: {최종, EMA 정점, raw 정점} x {EMA, .live} x hseed{0,1}.
 # 정점은 in-loop valid 곡선에서 선정 (s0: EMA정점=최종, raw정점 134336 /
 # s1: raw정점=최종, EMA정점 67168).  GPU 하나당 한 (run, step) 묶음 4건.
-#   GPU=4 RUN=nq10_repro_s0 STEP=138534 bash experiments/run_repro_harness.sh
+#   GPU=4 RUN=nq10_repro_s0 STEP=138534 bash scripts/run_repro_harness.sh
 set -uo pipefail
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # scripts/ -> repo 루트
 GPU="${GPU:?}"; RUN="${RUN:?}"; STEP="${STEP:?}"
 CK=checkpoints/Nqueens-10-ACT-torch/$RUN
 for W in ema live; do

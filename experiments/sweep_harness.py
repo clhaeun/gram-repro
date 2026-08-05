@@ -1,5 +1,7 @@
 """N-Queens harness -- 논문 지표 ① Accuracy ③ Coverage@20 ④ majority@20 ⑤ verifier@20.
-샘플링 RNG 는 gram_harness.rollout (seed*100003+k).  --sigma/mu-scale 은 논문 Table 3 ablation.
+샘플링 RNG 는 gram_harness.rollout (seed*100003+k).
+★ --sigma-scale / --mu-scale 은 추론 시 스케일링이다.  논문 Table 3b 는 학습 시
+  ablation 이므로 직접 대응하지 않는다.
 사용: python experiments/sweep_harness.py --ckpt-dir <dir> --step step_N --out <json>
 """
 import argparse, hashlib, json, os, sys
@@ -78,8 +80,9 @@ def main():
     ap.add_argument("--n", type=int, default=8)
     ap.add_argument("--N", type=int, default=20)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--sigma-scale", type=float, default=1.0)  # Table 3b: 0 = "guide only"
-    ap.add_argument("--mu-scale", type=float, default=1.0)     # Table 3b: 0 = "stochasticity only"
+    # 추론 시 스케일링.  학습 시 ablation 인 논문 Table 3b 와 직접 대응하지 않는다.
+    ap.add_argument("--sigma-scale", type=float, default=1.0)  # 0 = guide only
+    ap.add_argument("--mu-scale", type=float, default=1.0)     # 0 = stochasticity only
     ap.add_argument("--sidecar", default="data/nqueens-8/sidecar_8.json")
     # N_sup 외삽용. None = 오버라이드 없음 (체크포인트 학습값 그대로).
     # eval 에선 gram.py 의 halted = (new_steps >= halt_max_steps) 만 남으므로 N_sup = 이 값.

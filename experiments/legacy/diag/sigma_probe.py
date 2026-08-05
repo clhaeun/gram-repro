@@ -21,8 +21,12 @@ import torch
 # experiments/legacy/diag/ 로 내려왔으므로 repo root 는 부모의 부모의 부모의 부모다
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-from experiments.gram_harness import load_model, load_puzzles, capture_sigma, capture_kl
-from experiments.eval_harness import _make_batch, _forward_once
+# 현행 experiments/gram_harness.py 는 load_model / rollout 만 남기고 축소됐다.
+# 아래 API 는 experiments/legacy/gram_harness_legacy.py 에만 있다.
+from experiments.legacy.gram_harness_legacy import (
+    load_model, load_puzzles, capture_sigma, capture_kl)
+# eval_harness 는 experiments/legacy/ 로 이동됐다 (경로 정정).
+from experiments.legacy.eval_harness import _make_batch, _forward_once
 
 
 def probe(net, inputs, labels, use_posterior, batch_size, seed=0):

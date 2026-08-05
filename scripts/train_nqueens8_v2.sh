@@ -6,17 +6,17 @@
 # 기존 train_nqueens8*.sh 는 건드리지 않는다. 모든 손잡이를 환경변수로 뽑아서
 # 다음 arm 을 sh 수정 없이 돌릴 수 있게 한다:
 #
-#   RUN=gram_nq8_fix_b               bash train_nqueens8_fix.sh   # EMA off (기본)
-#   RUN=gram_nq8_fix_a EMA=True      bash train_nqueens8_fix.sh   # EMA on 대조군
-#   RUN=gram_nq8_fix_c BETA=0.3      bash train_nqueens8_fix.sh
-#   RUN=gram_nq8_fix_d BETA=1.0      bash train_nqueens8_fix.sh
+#   RUN=gram_nq8_fix_b               bash scripts/train_nqueens8_v2.sh   # EMA off (기본)
+#   RUN=gram_nq8_fix_a EMA=True      bash scripts/train_nqueens8_v2.sh   # EMA on 대조군
+#   RUN=gram_nq8_fix_c BETA=0.3      bash scripts/train_nqueens8_v2.sh
+#   RUN=gram_nq8_fix_d BETA=1.0      bash scripts/train_nqueens8_v2.sh
 #
 # DRYRUN=1 을 주면 torchrun 을 echo 로 바꿔 조립 결과만 출력하고 실행하지 않는다.
 set -euo pipefail
 
 # 원본 스크립트들은 /workspace/TinyRecursiveModels 를 하드코딩했으나 이 박스의
 # repo 는 다른 경로다. 스크립트 자신의 위치를 repo 루트로 쓴다.
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # scripts/ -> repo 루트
 
 source ~/venv-gram/bin/activate 2>/dev/null || true   # bengio venv, 없으면 무시
 

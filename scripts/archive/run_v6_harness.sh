@@ -22,7 +22,7 @@
 # ★ 출력 파일명에 step 이 들어간다.  전에 step 을 빼먹어 정점 결과가 최종 결과에
 #   덮여 날아간 적이 있다.
 set -uo pipefail
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"   # scripts/archive/ -> repo 루트
 
 GPU="${GPU:?GPU=<idx> 를 줘라}"
 SHARD="${SHARD:-0}"

@@ -197,6 +197,7 @@ eval 마다 prior valid 를 보고 하락 2회에서 멈추는 장치가 필요�
    정점이 마지막 step 이라 하강 구간 자체가 없어 "없음"으로 적었다.
 4. **`experiments/run_sweep50_harness.sh` 를 새로 만들었다** (기존 `run_onehot_harness.sh`
    는 peak+final 고정이라 step 목록을 인자로 받게 고친 판). 커밋은 안 했다.
+   <sub>(2026-08-05 재배치: 두 파일 모두 현재 `scripts/archive/` 아래. `scripts/README.md` 참조)</sub>
 5. **GPU 4→b100, 5→b140, 6→b180, 7→b220** 으로 고정 배정. 학습·harness 모두 동일 배정.
 
 ## 7. 확인 못 한 것

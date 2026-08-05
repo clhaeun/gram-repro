@@ -6,7 +6,7 @@
 #   ★ 파일명에 step 이 들어간다. band_harness.sh 에서 step 누락으로 정점 결과가
 #     최종 결과에 덮여 날아간 적이 있다.  같은 실수 반복 금지.
 set -uo pipefail
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"   # scripts/archive/ -> repo 루트
 source ~/miniconda3/bin/activate gram
 
 WHICH="${1:?usage: run_v5_harness.sh <gpu0|gpu1>}"

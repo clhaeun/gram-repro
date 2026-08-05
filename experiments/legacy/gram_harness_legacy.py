@@ -1,5 +1,15 @@
 """Shared plumbing for the GRAM checkpoint verification experiments (e1-e4).
 
+2026-08-05 기준 experiments/gram_harness.py 와 동기화됨 (7407448 의 nodecay
+회피 6줄 포함).  현행이 바뀌면 이 사본은 낡는다.  e1~e4 가 깨지면 그때 다시
+동기화할 것.
+
+현행 gram_harness.py 는 load_model / rollout 만 남기고 축소됐다 (참조 0 인
+17종 제거).  e1~e4 · sigma_probe · eval_harness 가 쓰는 나머지 API
+(dist_*, sharded_rollout, load_puzzles, capture_*, metrics, pass_at_j,
+majority_vote, auroc, print_hits_histogram, save_json, add_common_args,
+out_dir_for) 는 이 사본에만 남아 있다 -- 그래서 이 파일이 존재한다.
+
 GRAM's latent transition is stochastic, so K independent forward passes on the
 *same* input already give K distinct answers -- unlike TRM, which is deterministic
 and needs test-time augmentation for sample diversity.  Every rollout here is
@@ -78,6 +88,12 @@ def load_model(ckpt_dir, step):
     cfg.ema = False                  # checkpoint is already the EMA copy
     cfg.eval_save_outputs = []
     cfg.evaluators = []
+    # harness 는 추론만 한다 -- optimizer param_group 은 의미가 없다.  끄지 않으면
+    # pretrain.py 의 load_checkpoint 가 `load_state_dict(..., assign=True)` 로
+    # Parameter 객체를 통째로 교체하면서 fp_transformer 가 붙인 `_no_weight_decay`
+    # 속성이 사라지고, _adamw_param_arg 가 "마킹 0개" 로 보고 ValueError 로 즉사한다.
+    # (학습은 load_checkpoint=None 이라 이 경로를 안 타서 마킹 2개가 살아 있다.)
+    cfg.nodecay_marked = False
     config = P.PretrainConfig(**OmegaConf.to_container(cfg, resolve=True))
 
     _, train_metadata = P.create_dataloader(
@@ -156,7 +172,15 @@ def mu_scale(net, scale):
 
 @contextmanager
 def capture_kl(net, sink):
-    """Append per-sample KL (summed over L and D) for every kl_loss call."""
+    """Append per-sample KL (summed over L and D) for every kl_loss call.
+
+    ★ kl_loss 는 gram.py:348 에서 H_cycle 마지막 1회만 호출된다.
+      48 transition 중 16 개만 잡힌다 -- Eq.14 truncation 그 자체다.
+      전 transition 캡처는 이 훅으로 불가능.  선례 legacy/diag/trace_kl.py
+
+      (H_cycles=3 x halt_max_steps=16 = 48 transition.  gram.py:312-331 의
+       no-grad H_cycles-1 루프는 샘플만 뽑고 kl_loss 를 부르지 않는다.)
+    """
     inner = net.model.inner
     orig = inner.kl_loss
 

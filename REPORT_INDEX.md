@@ -1,7 +1,17 @@
-# REPORT_INDEX.md — 리포트 29건 목차
+# REPORT_INDEX.md — 리포트 35건 목차
 
-작성 2026-07-30. 리포트 본문은 **삭제하지 않았다** — 29건 전부 `reports/archive/` 에 있고
-이 문서와 [REPORT_FINAL.md](REPORT_FINAL.md) 만 루트에 둔다. 각 리포트가 근거 파일이다.
+작성 2026-07-30, **갱신 2026-08-05** (§5 추가, 6건 archive 이동).
+리포트 본문은 **삭제하지 않았다** — 35건 전부 `reports/archive/` 에 있고
+아래 "루트 유지" 4건만 루트에 둔다. 각 리포트가 근거 파일이다.
+
+## 루트 유지 (현재 진행형 — 이동·개명 금지)
+
+| 리포트 | 사유 |
+|---|---|
+| [REPORT_FINAL.md](REPORT_FINAL.md) | Table 1 + Figure 10/12/15 를 담은 최종 결과표 원본. 인용 5건 |
+| [REPORT_INDEX.md](REPORT_INDEX.md) | 이 문서 |
+| [REPORT_final_pair_50.md](REPORT_final_pair_50.md) | 29번이 §2 편집 중(`6fd6b72`), 50번이 halt·G3 결과를 여기 쓸 예정 |
+| [REPORT_ema_collapse.md](REPORT_ema_collapse.md) · [REPORT_nq10_fp_result.md](REPORT_nq10_fp_result.md) | 08-04 갱신분. 24시간 내 변경이라 이동 보류 |
 
 원본을 남기는 이유: FINAL 초안을 쓰는 과정에서 실측 대조로 수치 3건이 정정됐다
 (10×10 측정 주체, v4 harness 미측정, `logvar_bias` 예산별 값). 원본이 있어야 사후 검증이 된다.
@@ -63,6 +73,31 @@
 |---|---|---|---|
 | [REPORT_expand_prep.md](reports/archive/REPORT_expand_prep.md) | 07-27 | 없음 (데이터) | 10×10 데이터는 이미 존재(k∈{7,8,9}, 43,420 입력)하고 무결성 통과. **Graph Coloring 데이터 + verifier 신규 구현.** |
 | [REPORT_gc8_50.md](reports/archive/REPORT_gc8_50.md) | 07-29~30 | `gc8_v5_{add_b0,add_bm4,catnd}_s*` 4-run | **GC 8-vertex 첫 캠페인 — conflict 0.046±0.025 vs 논문 2.7±2.1, coverage 0.842±0.026 vs 0.858±0.005.** bias −4 는 ~24.5k step 단색 붕괴 후 탈출. |
+
+## 5. pair 확장 · FPRM 기여1 (2026-07-21, 08-02 ~ 08-05) — 2026-08-05 archive 이동분
+
+| 리포트 | 일시 | 다루는 run | 핵심 결론 1줄 |
+|---|---|---|---|
+| [REPORT.md](reports/archive/REPORT.md) | 07-21 | 없음 (harness 최초) | eval harness + N-Queens 종료 보고. **repo 최초 리포트** — launch gate 통과, β sweep 3-run 착수. |
+| [REPORT_pair_expand_29.md](reports/archive/REPORT_pair_expand_29.md) | 08-02 | 없음 (데이터, 29번) | 빌더 pair 확장 — test 절단(`sidxs[:1]`) 제거. 구 데이터는 `-uniq` 로 **mv**(삭제 아님). |
+| [REPORT_pairexpand_50.md](reports/archive/REPORT_pairexpand_50.md) | 08-02 | 없음 (데이터, 50번) | 같은 빌더 확장의 50번 몫. 실제 코드 변경은 두 곳. |
+| [REPORT_fprm_50.md](reports/archive/REPORT_fprm_50.md) | 08-02 | 없음 (코드, 50번) | FPRM 기여1(pre-norm + residual scaling) 이식. 코드만, launch 없음. |
+| [REPORT_final_round_29.md](reports/archive/REPORT_final_round_29.md) | 08-02~03 | pair 최종 라운드 (29번) | pair 확장본 최종 보고용 라운드. `-uniq` 아님 — 구 결과와 직접 비교 금지. |
+| [REPORT_nq10_fp_launch.md](reports/archive/REPORT_nq10_fp_launch.md) | 08-03 | 없음 (launch 준비) | nq10 FPRM arm launch 준비. 정적 검증 + 파일 2종 생성까지, **승인 대기 상태로 종료**. |
+
+## 6. 미완 — 결과 대기 (플레이스홀더)
+
+이 자리는 **다른 서버가 진행 중**이라 비워 둔다. 채워 넣는 쪽이 이 표만 고치면 되도록
+분리해 두었다 — 위 표들과 충돌하지 않는다.
+
+| 항목 | 담당 | 상태 |
+|---|---|---|
+| nq8 A0/A3′ halt 32 · 64 (N_sup 외삽) | **50번** | **진행 중.** 결과는 `REPORT_final_pair_50.md` 에 기입 예정 |
+| nq10 A3′ μ/σ ablation (μ0σ1 / μ1σ0) | 34번 | 재실행 필요 (08-05 리부트로 11% 진행분 소실) |
+| nq8 Stage A `ii` 3셀 (`a7525_lr3e4`, `a7525_w2000`, `fx_a7525_w2000`) | 34번 | 46%/46%/33% 에서 리부트 중단. **SPEC §9 로 resume 불가** — 게이트 결과 보고 재실행 여부 결정 |
+
+nq10 A3′ N_sup 외삽 4점(halt 8/16/32/64, EMA, hseed 0)은 **34번에서 완료**됐고
+`reports/harness_nq10_fp/rs_s0_final_ema_h0_hms{8,16,32,64}.json` 에 있다 (`7407448`).
 
 ---
 

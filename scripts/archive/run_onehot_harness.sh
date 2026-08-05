@@ -7,7 +7,7 @@
 #
 # 사용법: bash experiments/run_onehot_harness.sh <run_name> <peak_step> <gpu>
 set -euo pipefail
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"   # scripts/archive/ -> repo 루트
 
 RUN=$1; PEAK=$2; GPU=$3
 CKPT="checkpoints/Nqueens-8-ACT-torch/${RUN}"

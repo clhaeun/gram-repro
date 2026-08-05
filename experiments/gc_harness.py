@@ -79,7 +79,8 @@ def main():
     ap.add_argument("--sidecar", default="data/graph-coloring-8/sidecar_gc_8.json")
     ap.add_argument("--n", type=int, default=8, help="노드 수"); ap.add_argument("--N", type=int, default=20)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--sigma-scale", type=float, default=1.0)   # 논문 Table 3 ablation
+    # 추론 시 스케일링.  학습 시 ablation 인 논문 Table 3b 와 직접 대응하지 않는다.
+    ap.add_argument("--sigma-scale", type=float, default=1.0)
     args = ap.parse_args()
     if args.selftest: return selftest(args.data, args.sidecar, args.n)
     assert args.ckpt_dir and args.step and args.out, "--ckpt-dir/--step/--out 필수"

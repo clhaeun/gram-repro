@@ -12,13 +12,13 @@
 # 사실(전부 wd=1.0 전제)과의 비교 축 -- A0(기존 L_level, 동일 lr/wd)와 L_level
 # 하나만 달라 pre-norm 단독 효과를 직접 잰다.
 #
-#   RUN=nq8_fp_A2_s0  ARM=A2  GPUS=4 SEED=0 bash train_nqueens8_fp.sh
-#   RUN=nq8_fp_A3p_s0 ARM=A3p GPUS=5 SEED=0 bash train_nqueens8_fp.sh
+#   RUN=nq8_fp_A2_s0  ARM=A2  GPUS=4 SEED=0 bash scripts/train_nqueens8_fp.sh
+#   RUN=nq8_fp_A3p_s0 ARM=A3p GPUS=5 SEED=0 bash scripts/train_nqueens8_fp.sh
 #
 # DRYRUN=1 로 조립만 확인 가능.
 set -euo pipefail
 
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # scripts/ -> repo 루트
 
 source ~/venv-gram/bin/activate 2>/dev/null || true
 

@@ -18,8 +18,9 @@ import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # experiments/legacy/diag/ 로 내려왔다: repo root(pretrain), experiments/(gram_harness), 그리고 여기
-sys.path[:0] = [os.path.dirname(os.path.dirname(os.path.dirname(_HERE))), os.path.dirname(os.path.dirname(_HERE)), _HERE]
-import gram_harness as H  # noqa: E402
+# experiments/legacy/ 를 추가 -- gram_harness_legacy 를 여기서 찾는다.
+sys.path[:0] = [os.path.dirname(os.path.dirname(os.path.dirname(_HERE))), os.path.dirname(os.path.dirname(_HERE)), os.path.dirname(_HERE), _HERE]
+import gram_harness_legacy as H  # noqa: E402  (현행 gram_harness 는 축소됨)
 
 # TRM on the same 10k Sudoku-Extreme test subsample, k=16 (analyze_sudoku_tta.py).
 TRM_REF = dict(no_hit_rate=0.015, majority_miss_rate=0.008, pass_at_K=0.985)

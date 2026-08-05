@@ -1,22 +1,24 @@
 #!/bin/bash
-# GRAM N-Queens 10x10 런처. train_nqueens8_fix.sh 의 사본 -- 아래 diff 외에는 동일.
-# steps/epoch = total_groups(36907)/768 = 48.06 (pretrain.py:223 은 total_groups 기준).
-# EPOCHS=900, EVALINT=30 -> 총 43250 step, eval 30회, eval 간격 1442 step.
+# GRAM N-Queens 10x10 런처 (pair 확장 데이터).
+# steps/epoch = total_groups(107,480)/768 = 139.95 -- global_batch_size 기준이라 GPU 수와 무관.
+# EPOCHS=990, EVALINT=30 -> iter당 floor(30x107480/768)=4,198 step x 33 iter = 최종 138,534.
+# 2026-08-03 minimal: kl sum / y one-hot zeropad 0.573 / logvar bias 0.0 / y add /
+# dual eval(ema 시) / nodecay name 분기는 코드 하드코딩 -- 해당 손잡이 제거됨.
 #
 # 기존 train_nqueens8*.sh 는 건드리지 않는다. 모든 손잡이를 환경변수로 뽑아서
 # 다음 arm 을 sh 수정 없이 돌릴 수 있게 한다:
 #
-#   RUN=gram_nq8_fix_b               bash train_nqueens8_fix.sh   # EMA off (기본)
-#   RUN=gram_nq8_fix_a EMA=True      bash train_nqueens8_fix.sh   # EMA on 대조군
-#   RUN=gram_nq8_fix_c BETA=0.3      bash train_nqueens8_fix.sh
-#   RUN=gram_nq8_fix_d BETA=1.0      bash train_nqueens8_fix.sh
+#   RUN=gram_nq8_fix_b               bash scripts/train_nqueens10_v2.sh   # EMA off (기본)
+#   RUN=gram_nq8_fix_a EMA=True      bash scripts/train_nqueens10_v2.sh   # EMA on 대조군
+#   RUN=gram_nq8_fix_c BETA=0.3      bash scripts/train_nqueens10_v2.sh
+#   RUN=gram_nq8_fix_d BETA=1.0      bash scripts/train_nqueens10_v2.sh
 #
 # DRYRUN=1 을 주면 torchrun 을 echo 로 바꿔 조립 결과만 출력하고 실행하지 않는다.
 set -euo pipefail
 
 # 원본 스크립트들은 /workspace/TinyRecursiveModels 를 하드코딩했으나 이 박스의
 # repo 는 다른 경로다. 스크립트 자신의 위치를 repo 루트로 쓴다.
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # scripts/ -> repo 루트
 
 source ~/venv-gram/bin/activate 2>/dev/null || true   # bengio venv, 없으면 무시
 
@@ -30,21 +32,15 @@ mkdir -p logs
 GPUS="${GPUS:-3,4,5,6}"
 NPROC="${NPROC:-$(echo $GPUS | tr ',' '\n' | wc -l)}"
 PORT="${PORT:-29621}"
-BETA="${BETA:-0.045}"      # nq10 final 값 (sum 눈금)
+BETA="${BETA:-0.045}"      # nq10 final 값 (sum 눈금) = arch yaml 과 동일
 EMA="${EMA:-True}"
 EMA_RATE="${EMA_RATE:-0.9999}"
 WARMUP="${WARMUP:-500}"
 NHEXP="${NHEXP:-1.5}"
-# 큰 β 는 수렴이 느려 epochs 를 늘려야 정점을 감싼다. 기본값은 기존과 동일한 3000 이라
-# EPOCHS 를 안 주면 이전 run 들과 bit-identical 하다.
-EPOCHS="${EPOCHS:-900}"
-# seed 편차 측정용. pretrain 의 seed 필드(cfg_pretrain.yaml:37 seed: 0)를 덮어쓴다.
-# 기본 0 = 기존과 동일.
+EPOCHS="${EPOCHS:-990}"    # 논문 1,000 은 1000%30!=0 이라 assert 에 걸림 -> 990 (30x33)
 SEED="${SEED:-0}"
-# EMA run 에서 raw(비EMA) 가중치도 매 eval 마다 같이 평가해 `_raw` 접미사로 로깅.
-# eval 비용만 2배가 되고 학습 경로는 그대로다. 기본 False = 기존 동작 불변.
-# (EMA=False 면 애초에 raw 를 평가하므로 이 값은 무시된다.)
 EVALINT="${EVALINT:-30}"
+LRMIN="${LRMIN:-1.0}"
 RUN="${RUN:-gram_nq10_a}"
 
 # launch 직전 점유 확인: 다른 작업이 쓰는 GPU면 즉시 중단.
@@ -71,6 +67,7 @@ CUDA_VISIBLE_DEVICES=${GPUS} ${LAUNCH} \
   'evaluators=[{name: nqueens@NQueens}]' \
   epochs=${EPOCHS} eval_interval=${EVALINT} \
   seed=${SEED} \
+  lr_min_ratio=${LRMIN} \
   lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 puzzle_emb_weight_decay=1.0 \
   arch.mlp_t=False arch.pos_encodings=rope \
   arch.L_layers=2 \

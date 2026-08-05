@@ -2,7 +2,7 @@
 # 50번 β sweep (one-hot ON) harness. 인자: <run> <step> <gpu>
 # seed 는 prior 샘플링 RNG (학습 편차 아님).
 set -euo pipefail
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"   # scripts/archive/ -> repo 루트
 RUN=$1; shift; GPU=$1; shift
 for STEP in "$@"; do
   for SEED in 0 1; do

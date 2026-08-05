@@ -15,8 +15,8 @@
 # 첫 eval 은 step 4198, n_eval=19220 (신 데이터 test 축).
 # ★ pretrain.py 의 assert epochs % eval_interval == 0 -- 990 % 30 = 0 OK.
 #
-#   RUN=nq10_fp_a3p_s0 SEED=0 EPOCHS=990 EVALINT=30 GPUS=2,3,4 PORT=29971 bash train_nqueens10_fp.sh
-#   RUN=nq10_fp_a3p_s1 SEED=1 EPOCHS=990 EVALINT=30 GPUS=5,6,7 PORT=29972 bash train_nqueens10_fp.sh
+#   RUN=nq10_fp_a3p_s0 SEED=0 EPOCHS=990 EVALINT=30 GPUS=2,3,4 PORT=29971 bash scripts/train_nqueens10_fp.sh
+#   RUN=nq10_fp_a3p_s1 SEED=1 EPOCHS=990 EVALINT=30 GPUS=5,6,7 PORT=29972 bash scripts/train_nqueens10_fp.sh
 #
 # ★ lr/wd 를 1e-3 으로 바꾸지 마라. 8x8 에서 A1(기존 블록+1e-3/1e-3)이 accuracy
 #   0.0087 로 죽었고 A2(fp+1e-3/1e-3)는 NaN 이었다. GRAM 은 TRM/FPRM 에 없는 KL 항이
@@ -27,7 +27,7 @@
 # DRYRUN=1 로 조립만 확인 가능.
 set -euo pipefail
 
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # scripts/ -> repo 루트
 
 source ~/venv-gram/bin/activate 2>/dev/null || true
 

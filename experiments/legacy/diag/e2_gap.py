@@ -22,8 +22,9 @@ import numpy as np
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # experiments/legacy/diag/ 로 내려왔다: repo root(pretrain), experiments/(gram_harness), 그리고 여기
-sys.path[:0] = [os.path.dirname(os.path.dirname(os.path.dirname(_HERE))), os.path.dirname(os.path.dirname(_HERE)), _HERE]
-import gram_harness as H  # noqa: E402
+# experiments/legacy/ 를 추가 -- gram_harness_legacy 를 여기서 찾는다.
+sys.path[:0] = [os.path.dirname(os.path.dirname(os.path.dirname(_HERE))), os.path.dirname(os.path.dirname(_HERE)), os.path.dirname(_HERE), _HERE]
+import gram_harness_legacy as H  # noqa: E402  (현행 gram_harness 는 축소됨)
 
 
 def summarize(roll, labels, tag):

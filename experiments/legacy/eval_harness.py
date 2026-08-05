@@ -42,7 +42,10 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from experiments.gram_harness import load_model, load_puzzles, sigma_scale as _sigma_scale_ctx
+# 현행 experiments/gram_harness.py 는 load_model / rollout 만 남기고 축소됐다.
+# load_puzzles 는 experiments/legacy/gram_harness_legacy.py 에만 있다.
+from experiments.legacy.gram_harness_legacy import (
+    load_model, load_puzzles, sigma_scale as _sigma_scale_ctx)
 
 PAD = 0
 

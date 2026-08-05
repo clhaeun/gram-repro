@@ -1,4 +1,4 @@
-"""Shared plumbing for the GRAM checkpoint verification experiments (e1-e4).
+"""Shared plumbing for the current N-Queens / GC harnesses.
 
 GRAM's latent transition is stochastic, so K independent forward passes on the
 *same* input already give K distinct answers -- unlike TRM, which is deterministic
@@ -7,61 +7,31 @@ therefore plain repetition: no symmetry transform, no inverse mapping.
 
 Provides:
   load_model()      checkpoint -> eager ACTLossHead (all_config.yaml + ema=False)
-  load_puzzles()    n test puzzles sampled from the raw .npy arrays
   rollout()         K forward passes -> preds / v_logits / token accuracy
-  metrics()         pass@j, majority@j, hit distribution, no-hit / majority-miss
-  capture_kl(), capture_sigma()   monkeypatch probes (diag_sigma.py pattern)
-  dist_*()          optional torchrun sharding across GPUs
+  sigma_scale(), mu_scale()   rollout 이 쓰는 추론시 스케일링 컨텍스트
+
+소비자는 세 곳뿐이고 전부 load_model + rollout 만 쓴다:
+  experiments/sweep_harness.py  experiments/gc_harness.py  experiments/coverage_curve.py
+
+★ 2026-08-05 축소.  참조 0 으로 확인된 17종을 제거했다:
+    dist_setup dist_gather dist_teardown shard sharded_rollout load_puzzles
+    capture_kl capture_sigma pass_at_j majority_vote metrics auroc
+    print_hits_histogram save_json add_common_args out_dir_for SEQ_LEN
+  전부 experiments/legacy/gram_harness_legacy.py 에 그대로 남아 있고,
+  e1~e4 · sigma_probe · eval_harness 는 그쪽을 import 한다.
+  capture_* 프로브의 유래(diag_sigma.py pattern)와 kl_loss 호출 횟수 주석도
+  사본 쪽에 있다.  선례는 exp/diag_sigma.py.
 """
-import json
 import os
-from collections import Counter
 from contextlib import contextmanager
-from math import comb
 
 import numpy as np
 import torch
-import torch.distributed as dist
 from omegaconf import OmegaConf
 
 import pretrain as P
 
 PAD = 0                 # dataset.json: pad_id = ignore_label_id = 0
-SEQ_LEN = 81            # sudoku default only; _batch/rollout now take seq_len from inputs.shape[-1]
-
-
-# --------------------------------------------------------------------------- #
-# distributed (optional -- scripts also run fine as plain `python foo.py`)
-# --------------------------------------------------------------------------- #
-def dist_setup():
-    """Returns (rank, world_size).  Only used to shard puzzles; no DDP wrapping."""
-    if "LOCAL_RANK" not in os.environ:
-        if torch.cuda.is_available():
-            torch.cuda.set_device(0)
-        return 0, 1
-    dist.init_process_group(backend="gloo")     # CPU group: we only gather results
-    local = int(os.environ["LOCAL_RANK"])
-    torch.cuda.set_device(local)
-    return dist.get_rank(), dist.get_world_size()
-
-
-def dist_gather(obj, rank, world_size):
-    """all_gather a picklable per-rank object; returns the list on every rank."""
-    if world_size == 1:
-        return [obj]
-    out = [None] * world_size
-    dist.all_gather_object(out, obj)
-    return out
-
-
-def dist_teardown():
-    if dist.is_initialized():
-        dist.destroy_process_group()
-
-
-def shard(n, rank, world_size):
-    """Contiguous slice of range(n) owned by this rank."""
-    return np.array_split(np.arange(n), world_size)[rank]
 
 
 # --------------------------------------------------------------------------- #
@@ -94,15 +64,6 @@ def load_model(ckpt_dir, step):
     net = getattr(ts.model, "_orig_mod", ts.model)   # eager ACTLossHead
     net.eval()
     return net, config
-
-
-def load_puzzles(config, n, seed=0):
-    """n test puzzles, sampled without replacement.  Returns (inputs, labels) int64."""
-    test_dir = os.path.join(config.data_paths[0], "test")
-    inputs = np.load(os.path.join(test_dir, "all__inputs.npy"))
-    labels = np.load(os.path.join(test_dir, "all__labels.npy"))
-    idx = np.random.default_rng(seed).choice(len(inputs), size=min(n, len(inputs)), replace=False)
-    return inputs[idx].astype(np.int64), labels[idx].astype(np.int64)
 
 
 def _batch(inputs, labels, lo, hi, batch_size):
@@ -141,8 +102,8 @@ def mu_scale(net, scale):
     that returns exactly what reparameterize returned before, so the normal path
     stays bit-identical.
 
-    Paired with sigma_scale(net, 0) this gives the three ablation modes of the
-    paper's Table 3b without touching models/recursive_reasoning/gram.py.
+    ★ 이것은 추론 시 스케일링이다.  논문 Table 3b 는 학습 시 ablation 이므로
+      직접 대응하지 않는다.
     """
     if float(scale) == 1.0:                 # no-op: do not even wrap
         yield
@@ -152,50 +113,6 @@ def mu_scale(net, scale):
 
     def patched(mu, logvar):
         return orig(mu * float(scale), logvar)
-
-    inner.reparameterize = patched
-    try:
-        yield
-    finally:
-        inner.reparameterize = orig
-
-
-@contextmanager
-def capture_kl(net, sink):
-    """Append per-sample KL (summed over L and D) for every kl_loss call."""
-    inner = net.model.inner
-    orig = inner.kl_loss
-
-    def patched(mu_q, logvar_q, mu_p, logvar_p):
-        kl = orig(mu_q, logvar_q, mu_p, logvar_p)
-        sink.append(kl.detach().float().sum(-1).sum(-1).cpu().numpy())
-        return kl
-
-    inner.kl_loss = patched
-    try:
-        yield
-    finally:
-        inner.kl_loss = orig
-
-
-@contextmanager
-def capture_sigma(net, sink):
-    """Append mean/median/p99 of the sampled std for every reparameterize call.
-
-    Calls arrive in transition order (H_cycles per forward), so sink index % H_cycles
-    identifies the transition depth.
-    """
-    inner = net.model.inner
-    orig = inner.reparameterize
-
-    def patched(mu, logvar):
-        std = (0.5 * logvar.detach().float()).exp() * inner.sigma_scale
-        flat = std.flatten()
-        q = torch.quantile(flat[torch.randperm(flat.numel(), device=flat.device)[:100000]],
-                           torch.tensor([0.5, 0.99], device=flat.device))
-        sink.append(dict(mean=flat.mean().item(), std=flat.std().item(),
-                         median=q[0].item(), p99=q[1].item()))
-        return orig(mu, logvar)
 
     inner.reparameterize = patched
     try:
@@ -262,139 +179,3 @@ def rollout(net, inputs, labels, K, sigma_scale_=1.0, mode="prior",
     mask = labels != PAD
     tok_acc = ((preds == labels[None]) & mask[None]).sum(-1) / np.maximum(mask.sum(-1), 1)[None]
     return dict(preds=preds, v=v, tok_acc=tok_acc.astype(np.float32))
-
-
-def sharded_rollout(net, inputs, labels, K, rank, world_size, **kw):
-    """rollout() split puzzle-wise across ranks, reassembled in the original order.
-
-    Every rank returns the full [K, N, ...] arrays.  With world_size == 1 this is
-    exactly rollout().
-    """
-    idx = shard(len(inputs), rank, world_size)
-    part = rollout(net, inputs[idx], labels[idx], K, **kw)
-    if world_size == 1:
-        return part
-
-    out = {k: np.zeros((K, len(inputs)) + part[k].shape[2:], dtype=part[k].dtype)
-           for k in ("preds", "v", "tok_acc")}
-    for r_idx, r_part in dist_gather((idx, part), rank, world_size):
-        for k in out:
-            out[k][:, r_idx] = r_part[k]
-    return out
-
-
-# --------------------------------------------------------------------------- #
-# metrics
-# --------------------------------------------------------------------------- #
-def pass_at_j(num_correct, k, j):
-    """Unbiased pass@j given num_correct hits out of k iid samples."""
-    if k - num_correct < j:
-        return 1.0
-    return 1.0 - comb(k - num_correct, j) / comb(k, j)
-
-
-def majority_vote(preds_k):
-    """preds_k [K, 81] -> (grid, votes) of the most common full grid; ties -> first seen."""
-    counts = Counter(tuple(g) for g in preds_k)
-    grid, votes = counts.most_common(1)[0]
-    return np.array(grid), votes, counts
-
-
-def metrics(preds, labels, js=(1, 2, 4, 8, 16)):
-    """preds [K, N, 81], labels [N, 81] -> the e1 metric bundle."""
-    K, n = preds.shape[0], preds.shape[1]
-    correct = (preds == labels[None]).all(-1).T            # [N, K]
-    num_correct = correct.sum(1)
-    any_hit = num_correct > 0
-
-    maj_correct = np.zeros(n, dtype=bool)
-    for p in range(n):
-        grid, _, _ = majority_vote(preds[:, p])
-        maj_correct[p] = np.array_equal(grid, labels[p])
-
-    rows = {}
-    # always include the full budget K, so a non-default --k still gets its own row
-    for j in sorted({j for j in js if j <= K} | {K}):
-        pj = float(np.mean([pass_at_j(int(c), K, j) for c in num_correct]))
-        mj = np.mean([np.array_equal(majority_vote(preds[:j, p])[0], labels[p]) for p in range(n)])
-        rows[j] = dict(pass_at_j=pj, majority_at_j=float(mj))
-
-    mask = labels != PAD
-    return dict(
-        n=n, K=K,
-        single_exact=float(correct[:, 0].mean()),
-        mean_sample_exact=float(correct.mean()),
-        majority_exact=float(maj_correct.mean()),
-        pass_at_K=float(any_hit.mean()),
-        no_hit_rate=float((~any_hit).mean()),
-        majority_miss_rate=float((any_hit & ~maj_correct).mean()),
-        voting_headroom=float(any_hit.mean() - maj_correct.mean()),
-        mean_token_acc=float((((preds == labels[None]) & mask[None]).sum(-1)
-                              / np.maximum(mask.sum(-1), 1)[None]).mean()),
-        by_j=rows,
-        hits_histogram={str(c): int(v) for c, v in sorted(Counter(num_correct.tolist()).items())},
-        _correct=correct,             # kept for e3; stripped before JSON
-        _maj_correct=maj_correct,
-    )
-
-
-def auroc(scores, labels_bool):
-    """Rank-based AUROC (sklearn is not installed in this env). Ties get mean rank."""
-    y = np.asarray(labels_bool, dtype=bool)
-    npos, nneg = int(y.sum()), int((~y).sum())
-    if npos == 0 or nneg == 0:
-        return float("nan")
-    order = np.argsort(np.asarray(scores, dtype=np.float64), kind="mergesort")
-    ranks = np.empty(len(scores), dtype=np.float64)
-    ranks[order] = np.arange(1, len(scores) + 1)
-    s = np.asarray(scores, dtype=np.float64)
-    for v in np.unique(s):                       # average ranks within tie groups
-        m = s == v
-        if m.sum() > 1:
-            ranks[m] = ranks[m].mean()
-    return float((ranks[y].sum() - npos * (npos + 1) / 2) / (npos * nneg))
-
-
-# --------------------------------------------------------------------------- #
-# reporting
-# --------------------------------------------------------------------------- #
-def print_hits_histogram(hist, n, K):
-    print(f"\n  hit distribution (correct samples out of {K})")
-    for c, cnt in sorted(hist.items(), key=lambda kv: int(kv[0])):
-        print(f"  {int(c):>3}/{K}: {cnt:>5}  {'#' * max(1, round(60 * cnt / n))}")
-
-
-def save_json(obj, out_dir, name):
-    os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, name)
-
-    def default(o):
-        if isinstance(o, (np.integer,)):
-            return int(o)
-        if isinstance(o, (np.floating,)):
-            return float(o)
-        if isinstance(o, np.ndarray):
-            return o.tolist()
-        raise TypeError(type(o))
-
-    clean = {k: v for k, v in obj.items() if not k.startswith("_")}
-    with open(path, "w") as f:
-        json.dump(clean, f, indent=2, default=default)
-    print(f"\nsaved -> {path}")
-    return path
-
-
-def add_common_args(ap):
-    ap.add_argument("--ckpt-dir", required=True)
-    ap.add_argument("--step", default="step_65100")
-    ap.add_argument("--num-puzzles", type=int, default=1000,
-                    help="name avoids torchrun's --n* abbreviation clash")
-    ap.add_argument("--k", type=int, default=16)
-    ap.add_argument("--batch-size", type=int, default=512)
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--out-dir", default=None, help="default: <ckpt-dir>/experiments")
-    return ap
-
-
-def out_dir_for(args):
-    return args.out_dir or os.path.join(args.ckpt_dir, "experiments")

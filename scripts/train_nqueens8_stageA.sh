@@ -10,7 +10,7 @@
 # 결론은 nq10 에서 낸다.
 #
 #   RUN=nq8_A3p_ii_a7525_s0 RESIDUAL_SCALE=input-independent ALPHA1=0.75 ALPHA2=0.25 \
-#     NODECAY_MARKED=True GPUS=0 PORT=29981 bash train_nqueens8_stageA.sh
+#     NODECAY_MARKED=True GPUS=0 PORT=29981 bash scripts/train_nqueens8_stageA.sh
 #
 # ★ residual_scale 화이트리스트 = {none, fixed, input-independent, input-dependent}
 #   (models/fp_transformer.py:147).  learnable 은 없다 -- 넣으면 ValueError.
@@ -42,7 +42,7 @@
 # DRYRUN=1 로 조립만 확인 가능.
 set -euo pipefail
 
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # scripts/ -> repo 루트
 
 source ~/venv-gram/bin/activate 2>/dev/null || true
 

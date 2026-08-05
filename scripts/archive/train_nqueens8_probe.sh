@@ -14,7 +14,7 @@ set -euo pipefail
 
 # 원본 스크립트들은 /workspace/TinyRecursiveModels 를 하드코딩했으나 이 박스의
 # repo 는 다른 경로다. 스크립트 자신의 위치를 repo 루트로 쓴다.
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"   # scripts/archive/ -> repo 루트
 
 source ~/venv-gram/bin/activate 2>/dev/null || true   # bengio venv, 없으면 무시
 
