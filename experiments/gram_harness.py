@@ -78,6 +78,12 @@ def load_model(ckpt_dir, step):
     cfg.ema = False                  # checkpoint is already the EMA copy
     cfg.eval_save_outputs = []
     cfg.evaluators = []
+    # harness 는 추론만 한다 -- optimizer param_group 은 의미가 없다.  끄지 않으면
+    # pretrain.py 의 load_checkpoint 가 `load_state_dict(..., assign=True)` 로
+    # Parameter 객체를 통째로 교체하면서 fp_transformer 가 붙인 `_no_weight_decay`
+    # 속성이 사라지고, _adamw_param_arg 가 "마킹 0개" 로 보고 ValueError 로 즉사한다.
+    # (학습은 load_checkpoint=None 이라 이 경로를 안 타서 마킹 2개가 살아 있다.)
+    cfg.nodecay_marked = False
     config = P.PretrainConfig(**OmegaConf.to_container(cfg, resolve=True))
 
     _, train_metadata = P.create_dataloader(
