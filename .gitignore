@@ -88,3 +88,6 @@ core.*
 !exp/*.sh
 !exp/*.py
 !experiments/*.py
+
+# --- Claude Code 세션 로컬 (커밋 금지) ---
+.claude/
