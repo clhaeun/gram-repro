@@ -204,6 +204,51 @@ posterior 가 prior 로 무너진 게 아니다.  σ 도 무관하다 — `prior
 
 eval 간격(4,198 step)이 붕괴 구간(~500 step)보다 훨씬 크므로, eval 이 골짜기를
 찍었는지 회복 구간을 찍었는지는 **학습 로그의 `train/exact_accuracy`** 로 판별한다.
+★ 단 아래 3번째 모드는 이 방법으로 못 잡는다.
+
+### prior 단독형 — `nq10_A3p_ii_a7525` step 125,940
+
+| 지표 | 값 |
+|---|---:|
+| `nqueens/accuracy` (eval, **prior**) | **0.0323** |
+| `nqueens/queen_count_mean` | 8.7287 ← 정상 |
+| `nqueens/consistent_rate` | 1.0000 ← 정상 |
+| `train/exact_accuracy` (**posterior**, step 125,950) | **0.8889** ← 멀쩡하다 |
+
+**학습 지표가 완전히 건강한데 eval 만 무너진다.**  `gram.py:293-294` 를 보면
+```python
+if use_posterior is None:
+    use_posterior = self.training
+```
+**학습은 posterior(정답 y 를 봄), eval 은 prior(y 없음)** 이다.  즉
+`train/exact_accuracy` 는 "정답을 보여줬을 때 재구성하는 능력"이라
+**eval 건강의 대리지표가 아니다.**  posterior 가 멀쩡해도 prior 만 무너질 수 있다.
+
+3종 대비:
+
+| 모드 | eval(prior) | train(posterior) | queen_count | consistent |
+|---|---:|---:|---:|---:|
+| 빈 보드형 (58,772) | 0.0000 | **0.0000** 같이 붕괴 | 0.0392 | 0.0034 |
+| 배치 실패형 (37,782) | 0.0112 | 정상 | 10.0604 | 0.9646 |
+| **prior 단독형 (125,940)** | 0.0323 | **0.8889** 정상 | 8.7287 | 1.0000 |
+
+빈 보드형만 `train/exact_accuracy` 로 잡힌다.  나머지 둘은 **eval 의
+`nqueens/accuracy` 를 직접 보는 수밖에 없다.**
+
+### 후반 불안정 — 정점이 최종보다 한참 높을 수 있다
+
+기준 셀 완주 결과 (33 eval, live 축):
+
+| 구분 | step | accuracy |
+|---|---:|---:|
+| 최종 | 138,534 | 0.6052 |
+| **live 정점** | **100,752** | **0.7632** |
+| EMA 정점 | 75,564 | 0.5182 |
+| 최종 × EMA (헤드라인 규약) | 138,534 | **0.3444** |
+
+100,752 이후 9 eval 이 0.03~0.69 를 진동하며 정점을 한 번도 회복하지 못했다.
+**최종과 정점의 격차가 15.8pp**, 헤드라인 규약(최종×EMA)으로 보면 정점 대비
+**41.9pp** 낮다.  축 선택이 결론을 바꾼다 — 정점 step 을 반드시 같이 보고할 것.
 
 ### 보고 규약
 
