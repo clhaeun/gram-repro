@@ -1,6 +1,6 @@
 # CHECKLIST.md — 반복해서 당한 것만 모아둔다
 
-두 서버(29번 hinton / 50번 lecun)가 같은 repo 를 공유한다. 여기 있는 항목은 **실제로
+세 서버(29번 hinton / 34번 bengio / 50번 lecun)가 같은 repo 를 공유한다. 여기 있는 항목은 **실제로
 사고가 난 뒤에** 추가된 것이고, 같은 사고가 재발한 항목은 횟수를 적어둔다.
 
 ---
@@ -122,3 +122,32 @@ acc 3.19 (live 68.16)로 퇴화해 있음을 확인했다. 그리드 전체가 �
 # 기존 headline 값과 어긋나거나 비정상 범위면 그 가중치 축 전체를 폐기한다.
 # EMA 축이 의심되면 [7] 규약대로 queen_count_mean 을 같이 본다 (10 근처 아니면 퇴화).
 ```
+
+## 8. 결과는 나오는 즉시 커밋한다 — 하루치를 모아두지 마라 (2026-08-05)
+
+서버가 죽으면 `checkpoints/` `logs/` `outputs/` `wandb/` 는 **전부 .gitignore 대상이라
+같이 사라진다.** 즉 커밋 안 한 결과 = 없는 결과다. 하루치를 모아서 저녁에 커밋하는
+습관은 그 하루를 통째로 거는 것이다.
+
+규칙:
+
+1. **eval / harness 가 JSON 을 하나 떨어뜨리면 그 자리에서 커밋·push 한다.**
+   (`reports/g3/` `reports/stageA/` `reports/harness_nq10_fp/` `experiments/results/`)
+2. **진행 중 학습은 eval 단위로 곡선 스냅샷을 갱신한다.** checkpoint 가 날아가도
+   곡선은 남는다.
+   ```bash
+   python scripts/dump_inloop_snapshot.py          # 지금 도는 run 만
+   python scripts/dump_inloop_snapshot.py --all    # 끝난 run 까지 전부
+   # → reports/snapshot_<호스트>_<시각>.md
+   ```
+   덤프 스크립트는 **`scripts/dump_inloop_snapshot.py` 하나뿐이다.** 서버마다 따로
+   만들지 마라 (08-05 에 29번·34번이 같은 스크립트를 각각 만들어 두 벌이 됐다).
+3. **run 을 새로 띄우면 `all_config.yaml` 을 즉시 `reports/configs/` 로 뜬다.**
+   (`reports/configs/README.md` 참조. 재실행 시 설정 복원의 유일한 근거다.)
+4. 진행 중 프로세스가 **쓰고 있는 파일은 건너뛴다.** 완료된 것만 커밋한다.
+
+### ★ git 은 반드시 `chaeun` 으로 한다 (50번 실제 사고)
+
+`root` 로 `git` 을 돌리면 `reports/` 이하 **소유권이 root 로 리셋되고, 그 디렉터리에
+쓰고 있던 학습·harness 프로세스가 권한 오류로 죽는다.** 50번에서 실제로 났다.
+`sudo git ...` 금지. 먼저 `whoami` 로 확인한다.
