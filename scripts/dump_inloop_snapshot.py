@@ -116,7 +116,8 @@ def main():
         print("활성 run 없음 — logs/ 에서 최근 수정된 .log 를 지정하라.", file=sys.stderr)
         return 1
 
-    host = socket.gethostname()
+    # 컨테이너 박스는 hostname 이 해시라 사람이 읽는 이름을 env 로 덮어쓴다 (예: lecun).
+    host = os.environ.get("SNAPSHOT_HOST") or socket.gethostname()
     now = datetime.now()
     stamp = now.strftime("%Y%m%d_%H%M")
     out_path = os.path.join(OUT, f"snapshot_{host}_{stamp}.md")
