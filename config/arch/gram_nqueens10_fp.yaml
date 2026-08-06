@@ -48,6 +48,10 @@ lprm_coef: 1.0
 #   'Key not in struct' 로 즉사한다 -- pydantic 선언만으로는 부족하다.
 eps_scale: 1.0
 
+# inner z_L loop damped update (z_L <- eta*z_tilde + (1-eta)*z_L). 1.0 = 비트 동일.
+# ★ eps_scale 과 같은 이유로 여기(struct) 선언이 반드시 필요하다.
+damping_eta: 1.0
+
 noise_head_expansion: 1.5
 
 # ---- FPRM 기여1 (use_fp_transformer 외 나머지는 dataclass default 가 이미 활성값이지만

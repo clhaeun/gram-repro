@@ -89,6 +89,11 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     # 1.0 = 현행과 비트 단위 동일.
     eps_scale: float = 1.0
 
+    # inner z_L loop damped update. 1.0 = 현행과 비트 단위 동일.
+    # η 고정. patience/adaptive 는 넣지 않는다 -- L_cycles(4) < FPRM patience(10) 이라
+    # 발동 기회 자체가 없다.
+    damping_eta: float = 1.0
+
     noise_head_expansion: float = 4.0
 
 
@@ -322,7 +327,12 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         with torch.no_grad():
             for _H_step in range(self.config.H_cycles-1):
                 for _L_step in range(self.config.L_cycles):
-                    z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+                    z_tilde = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+                    if self.config.damping_eta != 1.0:
+                        z_L = self.config.damping_eta * z_tilde \
+                              + (1.0 - self.config.damping_eta) * z_L
+                    else:
+                        z_L = z_tilde
 
                 z_H = self.L_level(z_H, z_L, **seq_info)
 
@@ -344,7 +354,12 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
         # 1 with grad
         for _L_step in range(self.config.L_cycles):
-            z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+            z_tilde = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+            if self.config.damping_eta != 1.0:
+                z_L = self.config.damping_eta * z_tilde \
+                      + (1.0 - self.config.damping_eta) * z_L
+            else:
+                z_L = z_tilde
 
         z_H = self.L_level(z_H, z_L, **seq_info)
 
