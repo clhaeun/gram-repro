@@ -64,6 +64,9 @@ PEWD="${PEWD:-$WD}"
 RESIDUAL_SCALE="${RESIDUAL_SCALE:?RESIDUAL_SCALE 을 줘라 (none|fixed|input-independent|input-dependent)}"
 ALPHA1="${ALPHA1:?ALPHA1 을 줘라 (0,1) 개구간}"
 ALPHA2="${ALPHA2:?ALPHA2 를 줘라 (0,1) 개구간}"
+# ε 주입 계수. 기본 1.0 = 현행과 비트 단위 동일 -> 기존 명령줄 불변.
+# ALPHA1/2 의 ${VAR:?} 필수 스타일과 다른 것은 의도적이다(회귀 명령줄 보존).
+EPS_SCALE="${EPS_SCALE:-1.0}"
 NODECAY_MARKED="${NODECAY_MARKED:-True}"
 
 GPUS="${GPUS:-0}"
@@ -115,6 +118,7 @@ CUDA_VISIBLE_DEVICES=${GPUS} ${LAUNCH} \
   arch.kl_coef=${BETA} arch.noise_head_expansion=${NHEXP} \
   arch.residual_scale=${RESIDUAL_SCALE} \
   arch.alpha_1_init=${ALPHA1} arch.alpha_2_init=${ALPHA2} \
+  arch.eps_scale=${EPS_SCALE} \
   ema=${EMA} ema_rate=${EMA_RATE} lr_warmup_steps=${WARMUP} \
   +run_name=${RUN} \
   2>&1 | tee logs/${RUN}.log

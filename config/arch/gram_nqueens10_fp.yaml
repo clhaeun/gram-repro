@@ -43,6 +43,11 @@ kl_coef: 0.045      # KL 가중치 (beta), nq10 final 라운드 값 (sum 눈금)
 kl_balance: 0.8
 lprm_coef: 1.0
 
+# ε 주입 계수 (z_H = z_H + eps_scale*eps). 1.0 = 현행과 비트 단위 동일.
+# ★ hydra arch config 는 struct 라 여기 선언하지 않으면 arch.eps_scale 오버라이드가
+#   'Key not in struct' 로 즉사한다 -- pydantic 선언만으로는 부족하다.
+eps_scale: 1.0
+
 noise_head_expansion: 1.5
 
 # ---- FPRM 기여1 (use_fp_transformer 외 나머지는 dataclass default 가 이미 활성값이지만

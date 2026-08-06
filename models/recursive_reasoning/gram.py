@@ -84,6 +84,11 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     kl_balance: float = 0.8
     lprm_coef: float = 1.0
 
+    # ε 주입 계수. FPRM Theorem 1 의 유계성은 "모든 덧셈에 계수" 를 전제하는데
+    # GRAM 의 z_H = z_H + eps 만 계수가 없어 그 자리에서 보장이 깨진다.
+    # 1.0 = 현행과 비트 단위 동일.
+    eps_scale: float = 1.0
+
     noise_head_expansion: float = 4.0
 
 
@@ -265,13 +270,19 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
 
     @torch.no_grad()
-    def _latent_diag(self, z_H, z_L):
+    def _latent_diag(self, z_H, z_L, mu, logvar):
         """FPRM Figure 2b 재현용: 최종 transition 의 ‖z_H‖/‖z_L‖ (배치·시퀀스 평균).
         boundedness 가 FPRM 1차 판정 지표 -- accuracy 보다 먼저 본다.
+
+        eps_mu/eps_std 는 eps = mu + std*noise 의 두 항을 분리 기록한다.
+        29번 실측에서 σ 는 붕괴 구간 0.09% 변동뿐이었으므로, 폭주 주범이
+        mu 인지 z_H 자체인지 갈라야 eps_scale 셀 결과를 해석할 수 있다.
         """
         return {
             "diag/z_h_norm": z_H.detach().float().norm(dim=-1).mean(),
             "diag/z_l_norm": z_L.detach().float().norm(dim=-1).mean(),
+            "diag/eps_mu_norm": mu.detach().float().norm(dim=-1).mean(),
+            "diag/eps_std_norm": (torch.exp(0.5 * logvar.detach().float()) * self.sigma_scale).norm(dim=-1).mean(),
         }
 
 
@@ -328,7 +339,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                 else:
                     eps = self.reparameterize(mu_p, logvar_p)
 
-                z_H = z_H + eps
+                z_H = z_H + self.config.eps_scale * eps
                 lrpm_z.append(z_H[:, 0])
 
         # 1 with grad
@@ -351,9 +362,9 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             kl = None
 
         # Logging-only; posterior path (= training) only, so eval stays untouched.
-        diag = self._latent_diag(z_H, z_L) if use_posterior else None
+        diag = self._latent_diag(z_H, z_L, mu_q, logvar_q) if use_posterior else None
 
-        z_H = z_H + eps
+        z_H = z_H + self.config.eps_scale * eps
         lrpm_z.append(z_H[:, 0])
 
 
