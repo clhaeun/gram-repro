@@ -16,10 +16,18 @@ from evaluators.nqueens import verify_boards               # noqa: E402
 
 
 def flat_stats(preds, inputs, n):
-    """① Accuracy (Table 1 single-sample): 전 샘플 각각 채점한 valid 평균."""
+    """① Accuracy (Table 1 single-sample): 전 샘플 각각 채점한 valid 평균.
+
+    queen_count_* 는 같은 K*B 전샘플 축의 통계다.  학습 로그의
+    `nqueens/queen_count_mean` 은 in-loop eval 의 단일 샘플 축이라 눈금이 다르다 --
+    직접 비교 금지 (사수 지시 2026-08-06 로 harness 축을 추가 산출).
+    """
     K, B, L = preds.shape
     r = verify_boards(preds.reshape(K * B, L), np.tile(inputs, (K, 1)), n)
-    return dict(valid=float(r["valid"].mean()))
+    qc = r["queen_count"]
+    return dict(valid=float(r["valid"].mean()),
+                queen_count_mean=float(qc.mean()),
+                queen_count_min=int(qc.min()), queen_count_max=int(qc.max()))
 
 
 def majority_row(rows):
@@ -66,9 +74,21 @@ def coverage_at_N(cand, inputs, n, totals):
              total_mean=(float(totals[m].mean()) if m.any() else None))
         for name, lo, hi in SOL_BUCKETS for m in [have & (totals >= lo) & (totals <= hi)]]
     # pair 확장 test 에서 입력(퍼즐) 축 재집계용 행 원자료
+    ihash = [hashlib.sha1(v.astype(np.uint8).tobytes()).hexdigest()[:16] for v in inputs]
     res["per_row"] = {
-        "ihash": [hashlib.sha1(v.astype(np.uint8).tobytes()).hexdigest()[:16] for v in inputs],
-        "totals": totals.tolist(), "found": found.tolist()}
+        "ihash": ihash, "totals": totals.tolist(), "found": found.tolist()}
+    # ★ res["coverage"] 는 행 축 macro (행마다 found/total 을 평균).
+    #   micro(합계비)는 found_mean/total_mean 이다.
+    #   coverage_macro_by_input 은 퍼즐 축 macro (같은 ihash 의 found/total 을
+    #   합산 후 퍼즐마다 평균).
+    #   세 축은 눈금이 다르다 -- 인용 시 반드시 어느 축인지 밝힐 것.
+    agg = {}
+    for h, t, f in zip(ihash, totals.tolist(), found.tolist()):
+        if t > 0:
+            a = agg.setdefault(h, [0, 0]); a[0] += f; a[1] += t
+    res["coverage_macro_by_input"] = (
+        float(np.mean([min(f, t) / t for f, t in agg.values()])) if agg else None)
+    res["n_inputs_scored"] = len(agg)
     return res
 
 
@@ -115,9 +135,15 @@ def main():
     c = res["coverage_at_20"]
     if c["n_found_gt_total"]:
         print(f"WARNING: n_found_gt_total={c['n_found_gt_total']} (0 이어야 정상)")
-    print(f"{res['checkpoint']}  acc={res['prior_all_samples']['valid']:.4f} "
-          f"cov@{args.N}={c['coverage']:.4f} maj={res['majority_at_N_valid']:.4f} "
-          f"vsel={res['verifier_selected_at_N_valid']:.4f}  [out] {args.out}")
+    cov_micro = c["found_mean"] / c["total_mean"]        # 합계비 = micro
+    print(f"{res['checkpoint']}  hms={res['halt_max_steps']} "
+          f"acc={res['prior_all_samples']['valid']:.4f} "
+          f"cov_row_macro@{args.N}={c['coverage']:.4f} "
+          f"cov_micro@{args.N}={cov_micro:.4f} "
+          f"cov_puzzle_macro@{args.N}={c['coverage_macro_by_input']:.4f} "
+          f"maj={res['majority_at_N_valid']:.4f} "
+          f"vsel={res['verifier_selected_at_N_valid']:.4f} "
+          f"qc={res['prior_all_samples']['queen_count_mean']:.4f}  [out] {args.out}")
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w") as f:
         json.dump(res, f, indent=2)
