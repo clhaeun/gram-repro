@@ -257,3 +257,29 @@ if use_posterior is None:
 `all/accuracy` 와 `lm_loss` 는 **진단용**이고 표에 넣지 않는다.
 `nqueens/exact` 는 라벨 exact match 라 **논문 정의와 어긋난다** — N-Queens 는 답이
 여러 개다.  쓰지 마라.
+
+## 10. 체크포인트가 NaN 일 수 있다 — harness 전에 텐서 검사 (2026-08-05)
+
+**harness 를 걸기 전에 체크포인트 텐서의 NaN 검사를 먼저 하라.**
+`nqueens/accuracy=0` · `consistent_rate=0` · `queen_count_mean=0` 이 **동시에** 나오면
+다수클래스 퇴화가 아니라 **NaN 을 의심하라.** 퇴화는 queen_count 가 0 이 아니다
+(예: 3.47 이나 17.41 처럼 엉뚱한 값이 찍힌다). 셋이 동시에 0 이면 가중치가 깨진 것이다.
+
+§9 의 퇴화와 구분하는 법: queen_count_mean ≠ 0 이면 퇴화, = 0 이면 NaN 이다.
+
+실측: `nq10_A3p_ii_a7525_lr3e4/step_138534`(+`.live`) — **37개 중 26개 텐서가 NaN**.
+직전 `step_134336` 은 NaN 0개로 멀쩡했다. in-loop 로그도 `lm_loss=nan` 으로 찍혀 있었다.
+이걸 모르고 harness 를 걸면 2시간 30분(2셀)을 태워 확정된 0.0000 을 얻는다.
+
+```bash
+python - <<'EOF'
+import torch, sys
+sd = torch.load(sys.argv[1] if len(sys.argv)>1 else "checkpoints/.../step_N",
+                map_location="cpu", weights_only=True)
+bad = [k for k,v in sd.items() if torch.is_tensor(v) and torch.isnan(v.float()).any()]
+print(f"NaN 텐서 {len(bad)}/{sum(1 for v in sd.values() if torch.is_tensor(v))}", bad[:5])
+EOF
+```
+
+NaN 이면 그 step 은 harness 를 돌리지 말고 표에 **"step_N NaN 발산(가중치 M/T 텐서 NaN),
+harness 미실시"** 로 기록하고, **마지막 정상 checkpoint 를 대체측**한다.
