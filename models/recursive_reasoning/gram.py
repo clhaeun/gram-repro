@@ -96,6 +96,12 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
 
     noise_head_expansion: float = 4.0
 
+    # 평가 시 posterior 를 ★측정 전용★ 으로 계산해 transition 별 KL 을 기록한다.
+    # GRAM Eq 14 는 KL 을 마지막 transition 에만 걸므로(논문이 biased surrogate 로
+    # 명시) 앞쪽 transition 의 prior 가 미학습 상태로 남는지 실측하기 위한 것이다.
+    # False = 현행과 비트 단위 동일.
+    diag_kl_per_transition: bool = False
+
 
 class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
     def __init__(self, config: TinyRecursiveReasoningModel_ACTV1Config) -> None:
@@ -218,6 +224,12 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         # sigma_scale()/mu_scale() 컨텍스트가 이 속성을 바꾼다)
         self.sigma_scale = 1.0
 
+        # diag_kl_per_transition 누적기 (측정 전용).  forward 궤적과 무관하며
+        # 플래그가 꺼져 있으면 건드리지 않는다.  harness 가 reset -> rollout ->
+        # result 순으로 쓴다.
+        self.diag_kl_sum: Dict[str, float] = {}
+        self.diag_kl_n: int = 0
+
 
     def _input_embeddings(self, input: torch.Tensor, puzzle_identifiers: torch.Tensor):
         # Token embedding
@@ -291,6 +303,54 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         }
 
 
+    def diag_kl_reset(self):
+        """diag_kl_per_transition 누적기 초기화 (harness 가 rollout 전에 부른다)."""
+        self.diag_kl_sum = {}
+        self.diag_kl_n = 0
+
+
+    def diag_kl_result(self):
+        """누적된 transition 별 KL/μ/σ 의 forward 평균.  누적이 없으면 None."""
+        if self.diag_kl_n == 0:
+            return None
+        return {k: v / self.diag_kl_n for k, v in sorted(self.diag_kl_sum.items())}
+
+
+    @torch.no_grad()
+    def _diag_kl_accumulate(self, dst: dict):
+        for k, v in dst.items():
+            self.diag_kl_sum[k] = self.diag_kl_sum.get(k, 0.0) + float(v)
+        self.diag_kl_n += 1
+
+
+    @torch.no_grad()
+    def _record_diag_kl(self, t: int, z_H, y_emb, mu_p, logvar_p, dst: dict):
+        """transition t 의 posterior 를 ★측정 전용★ 으로 계산해 KL/μ/σ 를 적는다.
+
+        ★★ 여기서 만든 mu_q 로 ε 을 뽑거나 z_H 를 갱신하면 절대 안 된다.  궤적이
+           바뀌면 다른 것을 재게 된다.  post_mu/post_logvar/_y_embeddings 는 전부
+           RNG 를 소비하지 않으므로 이 블록은 prior 경로의 난수 스트림도 건드리지
+           않는다 (그래서 플래그 on/off 가 비트 단위로 같다).
+
+        kl_t 는 losses.py 의 kl_loss 와 같은 눈금이다: D축 합 -> L축 합.  다만
+        batch 는 합이 아니라 평균이다 -- diag/ 접두사는 pretrain.py 가 world_size
+        로만 나누는 per-rank batch mean 규약이기 때문이다.
+        """
+        u_y = z_H + y_emb
+        mu_q = self.post_mu(u_y)
+        logvar_q = self.post_logvar(u_y) + self.post_logvar_bias
+        kl = self.kl_loss(mu_q, logvar_q, mu_p, logvar_p)
+        std_q = torch.exp(0.5 * logvar_q.float())
+        dst[f"diag/kl_t{t}"] = kl.sum(-1).sum(-1).mean()
+        # 두 축을 병기한다.  *_norm 은 per-position L2(D축) 뒤 나머지 축 평균,
+        # *_absmean/*_mean 은 (B,L,D) 전체 element 평균이다.  두 축은 sqrt(D) 만큼
+        # 눈금이 다르므로 인용 시 어느 축인지 밝힐 것.
+        dst[f"diag/eps_mu_norm_t{t}"] = mu_q.float().norm(dim=-1).mean()
+        dst[f"diag/eps_std_norm_t{t}"] = std_q.norm(dim=-1).mean()
+        dst[f"diag/eps_mu_absmean_t{t}"] = mu_q.float().abs().mean()
+        dst[f"diag/eps_std_mean_t{t}"] = std_q.mean()
+
+
 
     def empty_carry(self, batch_size: int):
         return TinyRecursiveReasoningModel_ACTV1InnerCarry(
@@ -311,6 +371,14 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
         y_emb = self._y_embeddings(batch["labels"]) if use_posterior else None
 
+        # 진단 B+ (측정 전용).  평가 시엔 use_posterior=False 라 y_emb 가 None 이므로
+        # 여기서 label 을 따로 읽는다.  ★ 궤적에는 절대 쓰지 않는다.
+        diag_kl_dst = None
+        diag_kl_y = None
+        if self.config.diag_kl_per_transition:
+            diag_kl_dst = {}
+            diag_kl_y = y_emb if y_emb is not None else self._y_embeddings(batch["labels"])
+
         seq_info = dict(
             cos_sin=self.rotary_emb() if hasattr(self, "rotary_emb") else None,
         )
@@ -326,6 +394,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         # H_cycles-1 without grad
         with torch.no_grad():
             for _H_step in range(self.config.H_cycles-1):
+                t = _H_step + 1                     # 1-based transition 번호
                 for _L_step in range(self.config.L_cycles):
                     z_tilde = self.L_level(z_L, z_H + input_embeddings, **seq_info)
                     if self.config.damping_eta != 1.0:
@@ -348,6 +417,11 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                     eps = self.reparameterize(mu_q, logvar_q)
                 else:
                     eps = self.reparameterize(mu_p, logvar_p)
+
+                # ★ eps 를 뽑은 뒤에 잰다 -- 난수 스트림에 끼어들지 않음을 눈으로
+                #   확인할 수 있게. (_record_diag_kl 자체는 RNG 를 안 쓴다)
+                if diag_kl_dst is not None:
+                    self._record_diag_kl(t, z_H, diag_kl_y, mu_p, logvar_p, diag_kl_dst)
 
                 z_H = z_H + self.config.eps_scale * eps
                 lrpm_z.append(z_H[:, 0])
@@ -378,6 +452,13 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
         # Logging-only; posterior path (= training) only, so eval stays untouched.
         diag = self._latent_diag(z_H, z_L, mu_q, logvar_q) if use_posterior else None
+
+        # 마지막(grad) transition 도 같이 잰다 -- 이 자리만 KL 을 학습받으므로
+        # 앞쪽 t 의 미학습 여부를 판정하려면 기준점이 필요하다.
+        if diag_kl_dst is not None:
+            self._record_diag_kl(self.config.H_cycles, z_H, diag_kl_y, mu_p, logvar_p, diag_kl_dst)
+            self._diag_kl_accumulate(diag_kl_dst)
+            diag = {**diag, **diag_kl_dst} if diag is not None else diag_kl_dst
 
         z_H = z_H + self.config.eps_scale * eps
         lrpm_z.append(z_H[:, 0])

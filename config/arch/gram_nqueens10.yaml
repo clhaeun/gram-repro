@@ -41,3 +41,8 @@ kl_balance: 0.8
 lprm_coef: 1.0
 
 noise_head_expansion: 1.5
+
+# 진단 B+ (측정 전용): transition 별 KL/μ/σ 기록. False = 현행과 비트 단위 동일.
+# ★ pydantic 선언만으로는 부족하다 -- hydra arch config 는 struct 라 여기 없으면
+#   arch.diag_kl_per_transition 오버라이드가 'Key not in struct' 로 즉사한다.
+diag_kl_per_transition: False

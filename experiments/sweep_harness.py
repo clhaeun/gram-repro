@@ -107,12 +107,18 @@ def main():
     # N_sup 외삽용. None = 오버라이드 없음 (체크포인트 학습값 그대로).
     # eval 에선 gram.py 의 halted = (new_steps >= halt_max_steps) 만 남으므로 N_sup = 이 값.
     ap.add_argument("--halt-max-steps", type=int, default=None)
+    # 진단 B+ (측정 전용).  transition 별 KL/μ/σ 를 <out>.diagkl.json 에 따로 쓴다.
+    # ★ --out 본 JSON 은 이 플래그 유무와 비트 단위로 같아야 한다 (궤적 불변 검증).
+    ap.add_argument("--diag-kl", action="store_true")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
     net, _ = load_model(args.ckpt_dir, args.step)
     if args.halt_max_steps is not None:
         net.model.config.halt_max_steps = args.halt_max_steps   # inner 와 공유 객체
+    if args.diag_kl:
+        net.model.config.diag_kl_per_transition = True          # inner 와 공유 객체
+        net.model.inner.diag_kl_reset()
     inputs = np.load(f"{args.data}/all__inputs.npy").astype(np.int64)
     labels = np.load(f"{args.data}/all__labels.npy").astype(np.int64)
     B = len(inputs)
@@ -147,6 +153,17 @@ def main():
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w") as f:
         json.dump(res, f, indent=2)
+
+    # ★ 진단은 반드시 별도 파일.  본 JSON 에 한 글자라도 섞으면 on/off md5 대조가
+    #   깨져 "궤적을 안 건드렸다" 를 증명할 수 없다.
+    if args.diag_kl:
+        dk = net.model.inner.diag_kl_result()
+        dk_out = os.path.splitext(args.out)[0] + ".diagkl.json"
+        with open(dk_out, "w") as f:
+            json.dump({"checkpoint": res["checkpoint"], "H_cycles": net.model.config.H_cycles,
+                       "n_forwards": net.model.inner.diag_kl_n, "per_transition": dk}, f, indent=2)
+        print(f"  [diag-kl] {dk_out}  " +
+              " ".join(f"{k.split('/')[-1]}={v:.4g}" for k, v in dk.items() if "/kl_t" in k))
 
 
 if __name__ == "__main__":
