@@ -368,6 +368,9 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         dst[f"diag/eps_std_norm_t{t}"] = std_q.norm(dim=-1).mean()
         dst[f"diag/eps_mu_absmean_t{t}"] = mu_q.float().abs().mean()
         dst[f"diag/eps_std_mean_t{t}"] = std_q.mean()
+        # 차원(D) 간 표준편차.  역산이 아니라 직접 계산한다 -- sigma 가 D 축에서
+        # 균일한지(head 가 죽어 상수를 뱉는지) 를 mean 과 분리해 보기 위한 축.
+        dst[f"diag/eps_std_dimstd_t{t}"] = std_q.std(dim=-1).mean()
 
 
 

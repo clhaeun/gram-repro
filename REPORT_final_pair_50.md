@@ -305,6 +305,45 @@ w2000 은 warmup 이후 138k 까지 스파이크 0건. lr3e4 는 60k~100k 를 �
   w2000 0.6707/0.2463 (gap 0.424, std 0.090/0.173). 평균이 모이면서 원소별 std 가
   커지는 형태라 wd 붕괴(전 원소 logit 0 수렴)와 반대다.
 
+## 5d. 노이즈 head 상태 — state_dict 직접 실측 (2026-08-07, 50번)
+
+사실만 기록한다. 해석은 붙이지 않는다.
+
+측정 대상 (둘 다 완주분):
+- nq8 : `checkpoints/Nqueens-8-ACT-torch/nq8_final_add_s0/step_67428`
+- nq10: `checkpoints/Nqueens-10-ACT-torch/nq10_repro_s0/step_138534`
+
+**★ β 가 다르다 — 두 task 의 KL 값을 직접 비교할 때 반드시 명기할 것.**
+`all_config.yaml` 실측: nq8 `arch.kl_coef=0.07`, nq10 `arch.kl_coef=0.045`.
+`kl_balance` 는 둘 다 0.8. kl_reduction 은 sum 고정 (`losses.py:90-95`, 분기 없음).
+
+logvar bias (init 값은 `gram.py:214-215` 의 `nn.Parameter(torch.tensor(0.0))`):
+
+| | nq8 | nq10 |
+|---|---|---|
+| `prior_logvar_bias` | −0.00429853 (exp(0.5v)=0.99785304) | −0.00319413 (exp(0.5v)=0.99840421) |
+| `post_logvar_bias` | −0.00430220 (exp(0.5v)=0.99785121) | −0.00318404 (exp(0.5v)=0.99840925) |
+
+head weight L2 norm (SwiGLU `down_proj.weight`+`gate_up_proj.weight`, numel 786,432):
+
+| head | nq8 L2 | nq10 L2 |
+|---|---|---|
+| `prior_mu` | 3.1643 | 2.8651 |
+| `prior_logvar` | **3.9893** | **3.5515** |
+| `post_mu` | 3.2843 | 3.1373 |
+| `post_logvar` | **3.9645** | **3.5380** |
+
+★ logvar head 의 L2 가 mu head 보다 크다 (nq8 3.99 vs 3.16, nq10 3.55 vs 2.87).
+  즉 logvar head 가 weight decay 로 소거된 상태는 아니다.
+
+★ σ 의 학습 중 궤적은 두 run 모두 **존재하지 않는다**. `logs/nq8_final_add_s0.log`
+  (2026-08-02) 와 `logs/nq10_repro_s0.log` (2026-08-03) 는 문자열 `diag` 출현 0 회이며,
+  두 run 은 `_latent_diag`(`gram.py:290-303`) 도입 이전이다. 런처가
+  `WANDB_MODE=online` 이라 `wandb/` 하위 offline run 에도 없다.
+
+transition 별 KL/μ/σ 는 `sweep_harness.py --diag-kl` (커밋 8b7a5f1) 로 잰다 —
+산출물은 `<out>.diagkl.json`.
+
 ## 6. 남은 것
 
 - 29번: nq8_final_add_s2, nq8_final_catnd_s0/s1/s2 → 합류 시 nq8 3-seed / catnd 표 갱신.
