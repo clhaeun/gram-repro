@@ -74,6 +74,9 @@ ALPHA2="${ALPHA2:?ALPHA2 를 줘라 (0,1) 개구간}"
 EPS_SCALE="${EPS_SCALE:-1.0}"
 # inner z_L loop damped update. 기본 1.0 = 현행과 비트 단위 동일.
 DAMPING_ETA="${DAMPING_ETA:-1.0}"
+# scheduled sampling. 학습 중 각 transition 에서 확률 SS_PROB 로 prior 를 쓴다.
+# 기본 0.0 = 현행과 비트 단위 동일 -> 기존 명령줄 불변.
+SS_PROB="${SS_PROB:-0.0}"
 NODECAY_MARKED="${NODECAY_MARKED:-True}"
 
 GPUS="${GPUS:-0}"
@@ -126,6 +129,7 @@ CUDA_VISIBLE_DEVICES=${GPUS} ${LAUNCH} \
   arch.residual_scale=${RESIDUAL_SCALE} \
   arch.alpha_1_init=${ALPHA1} arch.alpha_2_init=${ALPHA2} \
   arch.eps_scale=${EPS_SCALE} arch.damping_eta=${DAMPING_ETA} \
+  arch.ss_prob=${SS_PROB} \
   ema=${EMA} ema_rate=${EMA_RATE} lr_warmup_steps=${WARMUP} \
   +run_name=${RUN} \
   2>&1 | tee logs/${RUN}.log

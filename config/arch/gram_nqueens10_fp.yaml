@@ -58,6 +58,10 @@ noise_head_expansion: 1.5
 # ★ eps_scale 과 같은 이유로 여기(struct) 선언이 반드시 필요하다.
 diag_kl_per_transition: False
 
+# scheduled sampling: 학습 중 각 transition 에서 확률 ss_prob 로 prior 를 쓴다.
+# 0.0 = 현행과 비트 단위 동일.  ★ struct 선언 필수 (위와 같은 이유).
+ss_prob: 0.0
+
 # ---- FPRM 기여1 (use_fp_transformer 외 나머지는 dataclass default 가 이미 활성값이지만
 #      사후 추적을 위해 전부 명시한다) --------------------------------------------
 use_fp_transformer: true

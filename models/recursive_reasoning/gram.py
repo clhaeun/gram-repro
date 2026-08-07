@@ -102,6 +102,11 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     # False = 현행과 비트 단위 동일.
     diag_kl_per_transition: bool = False
 
+    # 학습 중 각 transition 에서 확률 ss_prob 로 posterior 대신 prior 를 쓴다.
+    # 학습은 posterior(정답 봄) / 추론은 prior(정답 없음) 라는 exposure bias 완화용.
+    # 0.0 = 현행과 비트 단위 동일 (torch.rand 호출 자체를 건너뛴다).
+    ss_prob: float = 0.0
+
 
 class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
     def __init__(self, config: TinyRecursiveReasoningModel_ACTV1Config) -> None:
@@ -280,6 +285,20 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         return b * _kl(mu_q.detach(), logvar_q.detach(), mu_p, logvar_p) + (1 - b) * _kl(mu_q, logvar_q, mu_p.detach(), logvar_p.detach())
 
 
+    def _use_posterior_this_transition(self, use_posterior: bool, device) -> bool:
+        """[B] scheduled sampling: transition 마다 ★독립★ 으로 prior/posterior 를 뽑는다
+        (sequence 당 1회가 아니다).
+
+        ★ ss_prob=0.0 에서는 torch.rand 를 아예 부르지 않는다 -- 부르면 RNG 소비가
+          달라져 기존 run 과의 비트 동일성이 깨진다.  분기로 처리해야 한다.
+        """
+        if not use_posterior:
+            return False
+        if self.config.ss_prob <= 0.0:
+            return True
+        return bool(torch.rand((), device=device) >= self.config.ss_prob)
+
+
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5*logvar) * self.sigma_scale
         eps = torch.randn_like(std)
@@ -408,7 +427,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                 mu_p = self.prior_mu(z_H)
                 logvar_p = self.prior_logvar(z_H) + self.prior_logvar_bias
 
-                if use_posterior:
+                if self._use_posterior_this_transition(use_posterior, z_H.device):
                     # KL 페널티는 마지막(grad) transition 에만 걸린다 (Eq 14) --
                     # 여기 no-grad transition 들은 샘플만 뽑는다.
                     u_y = z_H + y_emb
@@ -440,7 +459,10 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         mu_p = self.prior_mu(z_H)
         logvar_p = self.prior_logvar(z_H) + self.prior_logvar_bias
 
-        if use_posterior:
+        # ★ [B] 마지막 transition 도 scheduled sampling 대상이다.  prior 로 뽑히면
+        #   q=p 라 KL 이 0 이므로 항 자체를 뺀다 (kl=None -> losses.py 가 0 처리).
+        use_post_last = self._use_posterior_this_transition(use_posterior, z_H.device)
+        if use_post_last:
             u_y = z_H + y_emb
             mu_q = self.post_mu(u_y)
             logvar_q = self.post_logvar(u_y) + self.post_logvar_bias
@@ -451,7 +473,8 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             kl = None
 
         # Logging-only; posterior path (= training) only, so eval stays untouched.
-        diag = self._latent_diag(z_H, z_L, mu_q, logvar_q) if use_posterior else None
+        # ss_prob=0.0 이면 use_post_last == use_posterior 라 기존과 동일하다.
+        diag = self._latent_diag(z_H, z_L, mu_q, logvar_q) if use_post_last else None
 
         # 마지막(grad) transition 도 같이 잰다 -- 이 자리만 KL 을 학습받으므로
         # 앞쪽 t 의 미학습 여부를 판정하려면 기준점이 필요하다.
