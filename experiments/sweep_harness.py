@@ -150,9 +150,18 @@ def main():
           f"maj={res['majority_at_N_valid']:.4f} "
           f"vsel={res['verifier_selected_at_N_valid']:.4f} "
           f"qc={res['prior_all_samples']['queen_count_mean']:.4f}  [out] {args.out}")
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    with open(args.out, "w") as f:
-        json.dump(res, f, indent=2)
+    # ★ 쓰기가 실패해도 계산 결과를 잃지 않는다.  2026-08-07 에 산출 디렉토리가
+    #   root 소유라 as-chaeun 실행이 PermissionError 로 죽으면서 nq8 σ 스윕 7셀이
+    #   통째로 날아갔다 (reports/INCIDENT_20260807_perm.md).  실패 시 stdout 으로
+    #   전량 덤프해 로그에서 복구할 수 있게 한다.
+    try:
+        os.makedirs(os.path.dirname(args.out), exist_ok=True)
+        with open(args.out, "w") as f:
+            json.dump(res, f, indent=2)
+    except OSError as e:
+        print(f"!!! WRITE FAILED {args.out}: {e}\n"
+              f"!!! 아래 RESULT_JSON 한 줄이 전량 산출물이다 (복구용)", flush=True)
+        print("RESULT_JSON " + json.dumps(res), flush=True)
 
     # ★ 진단은 반드시 별도 파일.  본 JSON 에 한 글자라도 섞으면 on/off md5 대조가
     #   깨져 "궤적을 안 건드렸다" 를 증명할 수 없다.

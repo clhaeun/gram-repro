@@ -78,6 +78,9 @@ DAMPING_ETA="${DAMPING_ETA:-1.0}"
 # 기본 0.0 = 현행과 비트 단위 동일 -> 기존 명령줄 불변.
 SS_PROB="${SS_PROB:-0.0}"
 NODECAY_MARKED="${NODECAY_MARKED:-True}"
+# 노이즈 head 의 weight_decay 예외 (nodecay_marked 와 독립). 기본 False = 비트 동일.
+NODECAY_LOGVAR_BIAS="${NODECAY_LOGVAR_BIAS:-False}"
+NODECAY_LOGVAR_HEAD="${NODECAY_LOGVAR_HEAD:-False}"
 
 GPUS="${GPUS:-0}"
 NPROC="${NPROC:-$(echo $GPUS | tr ',' '\n' | wc -l)}"
@@ -121,6 +124,7 @@ CUDA_VISIBLE_DEVICES=${GPUS} ${LAUNCH} \
   lr=${LR} puzzle_emb_lr=${PELR} weight_decay=${WD} puzzle_emb_weight_decay=${PEWD} \
   lr_min_ratio=${LRMIN} \
   nodecay_marked=${NODECAY_MARKED} \
+  nodecay_logvar_bias=${NODECAY_LOGVAR_BIAS} nodecay_logvar_head=${NODECAY_LOGVAR_HEAD} \
   arch.mlp_t=False arch.pos_encodings=rope \
   arch.L_layers=2 \
   arch.H_cycles=3 arch.L_cycles=4 arch.halt_max_steps=16 \

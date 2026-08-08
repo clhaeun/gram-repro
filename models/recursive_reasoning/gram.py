@@ -322,6 +322,28 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         }
 
 
+    @torch.no_grad()
+    def _record_train_diag(self, t: int, mu_q, logvar_q, mu_p, logvar_p, dst: dict, kl=None):
+        """[1] ★학습 중★ transition 별 σ/μ/KL 관측.  플래그 없이 posterior 분기에서
+        항상 돈다 -- σ 처방 arm 의 판정 지표가 σ 인데 학습 중 σ 를 못 보면 실험이
+        성립하지 않는다.
+
+        _record_diag_kl(--diag-kl, harness 전용) 과 달리 posterior 를 새로 계산하지
+        않는다.  이미 궤적이 쓰고 있는 mu_q/logvar_q 를 그대로 읽을 뿐이라
+        추가 head forward 가 없다.  no_grad + RNG 미소비 -> 궤적 불변.
+
+        마지막 transition 은 호출부가 이미 만든 kl 을 넘겨 재계산을 피한다.
+        축은 harness 쪽 diag/kl_t{t} 와 같다 (D축 합 -> L축 합 -> batch 평균).
+        """
+        std_q = torch.exp(0.5 * logvar_q.detach().float())
+        if kl is None:
+            kl = self.kl_loss(mu_q, logvar_q, mu_p, logvar_p)
+        dst[f"diag/train_kl_t{t}"] = kl.detach().sum(-1).sum(-1).mean()
+        dst[f"diag/train_std_mean_t{t}"] = std_q.mean()
+        dst[f"diag/train_std_dimstd_t{t}"] = std_q.std(dim=-1).mean()
+        dst[f"diag/train_mu_absmean_t{t}"] = mu_q.detach().float().abs().mean()
+
+
     def diag_kl_reset(self):
         """diag_kl_per_transition 누적기 초기화 (harness 가 rollout 전에 부른다)."""
         self.diag_kl_sum = {}
@@ -395,6 +417,9 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
         # 진단 B+ (측정 전용).  평가 시엔 use_posterior=False 라 y_emb 가 None 이므로
         # 여기서 label 을 따로 읽는다.  ★ 궤적에는 절대 쓰지 않는다.
+        # [1] 학습 중 σ 관측 (기본 on).  posterior 분기에서만 채워진다.
+        train_diag = {} if use_posterior else None
+
         diag_kl_dst = None
         diag_kl_y = None
         if self.config.diag_kl_per_transition:
@@ -437,6 +462,8 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                     mu_q = self.post_mu(u_y)
                     logvar_q = self.post_logvar(u_y) + self.post_logvar_bias
                     eps = self.reparameterize(mu_q, logvar_q)
+                    if train_diag is not None:
+                        self._record_train_diag(t, mu_q, logvar_q, mu_p, logvar_p, train_diag)
                 else:
                     eps = self.reparameterize(mu_p, logvar_p)
 
@@ -471,6 +498,9 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             logvar_q = self.post_logvar(u_y) + self.post_logvar_bias
             eps = self.reparameterize(mu_q, logvar_q)
             kl = self.kl_loss(mu_q, logvar_q, mu_p, logvar_p)
+            if train_diag is not None:
+                self._record_train_diag(self.config.H_cycles, mu_q, logvar_q,
+                                        mu_p, logvar_p, train_diag, kl=kl)
         else:
             eps = self.reparameterize(mu_p, logvar_p)
             kl = None
@@ -478,6 +508,12 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         # Logging-only; posterior path (= training) only, so eval stays untouched.
         # ss_prob=0.0 이면 use_post_last == use_posterior 라 기존과 동일하다.
         diag = self._latent_diag(z_H, z_L, mu_q, logvar_q) if use_post_last else None
+
+        # [1] transition 별 학습 diag 를 같은 채널에 얹는다 (losses.py:113-114 ->
+        #     pretrain.py:355-358 의 diag/ 규약).  ss_prob>0 로 prior 가 뽑힌
+        #     transition 은 mu_q 가 없어 그 t 의 키가 빠진다.
+        if train_diag:
+            diag = {**diag, **train_diag} if diag is not None else dict(train_diag)
 
         # 마지막(grad) transition 도 같이 잰다 -- 이 자리만 KL 을 학습받으므로
         # 앞쪽 t 의 미학습 여부를 판정하려면 기준점이 필요하다.

@@ -86,6 +86,11 @@ class PretrainConfig(pydantic.BaseModel):
     # (fp_transformer 의 input-independent α 등).  기본 False = AdamW 단일 param_group.
     nodecay_marked: bool = False
 
+    # 노이즈 head 의 weight_decay 예외.  nodecay_marked 와 독립이며 기본 False =
+    # 현행과 비트 단위 동일 (_adamw_param_arg 가 model.parameters() 를 그대로 반환).
+    nodecay_logvar_bias: bool = False   # prior_logvar_bias / post_logvar_bias
+    nodecay_logvar_head: bool = False   # prior_logvar / post_logvar head 하위 weight
+
 @dataclass
 class TrainState:
     model: nn.Module
@@ -116,25 +121,48 @@ def create_dataloader(config: PretrainConfig, split: str, rank: int, world_size:
     return dataloader, dataset.metadata
 
 
-def _adamw_param_arg(model: nn.Module, config: PretrainConfig):
-    """AdamW 에 넘길 params 인자.  nodecay_marked=False 면 `model.parameters()` 그대로.
+# nodecay 이름 매칭 규칙.  ★ endswith 가 아니라 substring 이다 --
+# logvar head 의 실제 파라미터 이름이 `...inner.prior_logvar.gate_up_proj.weight` 라
+# endswith 로는 못 잡는다.  반대로 bias 는 `...inner.prior_logvar_bias` 로 끝나므로
+# 점(.) 유무가 head/bias 를 깨끗이 가른다 ("prior_logvar." 는 bias 를 안 잡는다).
+_NODECAY_LOGVAR_BIAS_PATS = ("prior_logvar_bias", "post_logvar_bias")
+_NODECAY_LOGVAR_HEAD_PATS = ("prior_logvar.", "post_logvar.")
 
-    True 면 FPRM 이 `_no_weight_decay` 로 마킹한 파라미터를 weight_decay=0 group 으로
-    뺀다.  lr 은 optimizer step 이 param_groups 를 전수 순회하며 설정하므로 group 이
-    2 개여도 양쪽 다 갱신된다.  puzzle_emb 는 `.buffers()` 로 별도 optimizer 라
-    여기서 중복되지 않는다.  켜 놓고 하나도 안 걸리면 조용히 현행 동작이 되므로 죽인다.
+
+def _adamw_param_arg(model: nn.Module, config: PretrainConfig):
+    """AdamW 에 넘길 params 인자.  세 손잡이가 전부 꺼져 있으면 `model.parameters()` 그대로.
+
+    nodecay_marked      : FPRM 이 `_no_weight_decay` 속성으로 마킹한 파라미터 (fp_transformer 의 α 등)
+    nodecay_logvar_bias : prior_logvar_bias / post_logvar_bias
+    nodecay_logvar_head : prior_logvar / post_logvar head 하위 weight
+
+    셋은 독립이며 OR 로 합쳐 하나의 weight_decay=0 group 이 된다.  lr 은 optimizer
+    step 이 param_groups 를 전수 순회하며 설정하므로 group 이 2 개여도 양쪽 다
+    갱신된다.  puzzle_emb 는 `.buffers()` 로 별도 optimizer 라 여기서 중복되지 않는다.
+
+    ★ ValueError 는 nodecay_marked 경로에만 건다 -- 그건 "켰는데 마킹이 0개면
+      조용히 현행 동작이 된다" 를 막으려는 것이고, 이름 매칭 쪽은 아래에서
+      [nodecay] 출력으로 무엇이 잡혔는지 그대로 보여준다.
     """
-    if not config.nodecay_marked:
+    if not (config.nodecay_marked or config.nodecay_logvar_bias or config.nodecay_logvar_head):
         return model.parameters()
 
-    decay, nodecay, hit = [], [], []
+    decay, nodecay, hit, marked = [], [], [], []
     for name, param in model.named_parameters():
-        if getattr(param, "_no_weight_decay", False):
+        why = []
+        if config.nodecay_marked and getattr(param, "_no_weight_decay", False):
+            why.append("marked")
+            marked.append(name)
+        if config.nodecay_logvar_bias and any(p in name for p in _NODECAY_LOGVAR_BIAS_PATS):
+            why.append("logvar_bias")
+        if config.nodecay_logvar_head and any(p in name for p in _NODECAY_LOGVAR_HEAD_PATS):
+            why.append("logvar_head")
+        if why:
             nodecay.append(param)
-            hit.append(name)
+            hit.append(f"{name}[{'+'.join(why)}]")
         else:
             decay.append(param)
-    if not nodecay:
+    if config.nodecay_marked and not marked:
         raise ValueError("nodecay_marked 를 켰는데 _no_weight_decay 파라미터가 없다")
 
     print(f"[nodecay] weight_decay=0 대상 {len(nodecay)}개: {hit}", flush=True)

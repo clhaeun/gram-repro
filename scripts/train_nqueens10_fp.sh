@@ -66,6 +66,9 @@ EVALINT="${EVALINT:-30}"
 SEED="${SEED:-0}"
 LRMIN="${LRMIN:-1.0}"
 NODECAY_MARKED="${NODECAY_MARKED:-False}"   # residual_scale=fixed 면 마킹 파라미터가 없어 켜면 즉사(의도)
+# 노이즈 head 의 weight_decay 예외 (nodecay_marked 와 독립). 기본 False = 비트 동일.
+NODECAY_LOGVAR_BIAS="${NODECAY_LOGVAR_BIAS:-False}"
+NODECAY_LOGVAR_HEAD="${NODECAY_LOGVAR_HEAD:-False}"
 RUN="${RUN:?RUN 을 줘라}"
 
 if [ "${DRYRUN:-0}" = "1" ]; then
@@ -92,6 +95,7 @@ CUDA_VISIBLE_DEVICES=${GPUS} ${LAUNCH} \
   lr=${LR} puzzle_emb_lr=${PELR} weight_decay=${WD} puzzle_emb_weight_decay=${PEWD} \
   lr_min_ratio=${LRMIN} \
   nodecay_marked=${NODECAY_MARKED} \
+  nodecay_logvar_bias=${NODECAY_LOGVAR_BIAS} nodecay_logvar_head=${NODECAY_LOGVAR_HEAD} \
   arch.mlp_t=False arch.pos_encodings=rope \
   arch.L_layers=2 \
   arch.H_cycles=3 arch.L_cycles=4 arch.halt_max_steps=16 \

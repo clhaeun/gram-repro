@@ -36,6 +36,9 @@ BETA="${BETA:-0.045}"      # nq10 final 값 (sum 눈금) = arch yaml 과 동일
 # scheduled sampling. 각 transition 에서 확률 SS_PROB 로 prior 를 쓴다.
 # 기본 0.0 = 현행과 비트 단위 동일 -> 기존 명령줄 불변.
 SS_PROB="${SS_PROB:-0.0}"
+# 노이즈 head 의 weight_decay 예외 (nodecay_marked 와 독립). 기본 False = 비트 동일.
+NODECAY_LOGVAR_BIAS="${NODECAY_LOGVAR_BIAS:-False}"
+NODECAY_LOGVAR_HEAD="${NODECAY_LOGVAR_HEAD:-False}"
 EMA="${EMA:-True}"
 EMA_RATE="${EMA_RATE:-0.9999}"
 WARMUP="${WARMUP:-500}"
@@ -78,6 +81,7 @@ CUDA_VISIBLE_DEVICES=${GPUS} ${LAUNCH} \
   global_batch_size=768 \
   arch.kl_coef=${BETA} arch.noise_head_expansion=${NHEXP} \
   arch.ss_prob=${SS_PROB} \
+  nodecay_logvar_bias=${NODECAY_LOGVAR_BIAS} nodecay_logvar_head=${NODECAY_LOGVAR_HEAD} \
   ema=${EMA} ema_rate=${EMA_RATE} lr_warmup_steps=${WARMUP} \
   +run_name=${RUN} \
   2>&1 | tee logs/${RUN}.log
