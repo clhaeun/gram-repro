@@ -106,6 +106,9 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     # 학습은 posterior(정답 봄) / 추론은 prior(정답 없음) 라는 exposure bias 완화용.
     # 0.0 = 현행과 비트 단위 동일 (torch.rand 호출 자체를 건너뛴다).
     ss_prob: float = 0.0
+    # SS 분기 전용 RNG 시드.  ★ rank 에 의존하면 안 된다 (아래 _ss_gen 주석 참조).
+    # 런처가 arch.ss_seed=${SEED} 로 넘겨 seed 별로 SS 패턴이 달라지게 한다.
+    ss_seed: int = 0
 
 
 class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
@@ -235,6 +238,17 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         self.diag_kl_sum: Dict[str, float] = {}
         self.diag_kl_n: int = 0
 
+        # [B] scheduled sampling 전용 RNG.
+        # ★★ rank 무관한 시드를 쓴다.  pretrain.py:607 이
+        #    torch.random.manual_seed(config.seed + RANK) 로 rank 마다 전역 시드를
+        #    다르게 주므로, 전역 RNG 로 분기를 뽑으면 rank 별로 posterior/prior 가
+        #    갈린다.  그러면 마지막 transition 이 prior 인 rank 에서만
+        #    post_mu/post_logvar 의 grad 가 없어 pretrain.py 의 수동 all_reduce
+        #    호출 집합이 어긋나고 NCCL 이 교착한다 (62번 실측: 4~6 step SIGABRT).
+        # ★ CPU generator 라 CUDA 스트림의 randn_like 소비에 끼어들지 않는다.
+        self._ss_gen = torch.Generator()
+        self._ss_gen.manual_seed(self.config.ss_seed * 1000003 + 777)
+
 
     def _input_embeddings(self, input: torch.Tensor, puzzle_identifiers: torch.Tensor):
         # Token embedding
@@ -285,18 +299,22 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         return b * _kl(mu_q.detach(), logvar_q.detach(), mu_p, logvar_p) + (1 - b) * _kl(mu_q, logvar_q, mu_p.detach(), logvar_p.detach())
 
 
-    def _use_posterior_this_transition(self, use_posterior: bool, device) -> bool:
+    def _use_posterior_this_transition(self, use_posterior: bool) -> bool:
         """[B] scheduled sampling: transition 마다 ★독립★ 으로 prior/posterior 를 뽑는다
         (sequence 당 1회가 아니다).
 
         ★ ss_prob=0.0 에서는 torch.rand 를 아예 부르지 않는다 -- 부르면 RNG 소비가
           달라져 기존 run 과의 비트 동일성이 깨진다.  분기로 처리해야 한다.
+        ★ 전역 RNG 가 아니라 _ss_gen 을 쓴다.  전역은 rank 마다 시드가 달라
+          (pretrain.py:607) 분기가 갈리고 all_reduce 가 교착한다.  train step 당
+          inner forward 호출 수가 rank 간 동일하므로 이 generator 는 lockstep 을
+          유지한다.
         """
         if not use_posterior:
             return False
         if self.config.ss_prob <= 0.0:
             return True
-        return bool(torch.rand((), device=device) >= self.config.ss_prob)
+        return bool(torch.rand((), generator=self._ss_gen) >= self.config.ss_prob)
 
 
     def reparameterize(self, mu, logvar):
@@ -455,7 +473,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                 mu_p = self.prior_mu(z_H)
                 logvar_p = self.prior_logvar(z_H) + self.prior_logvar_bias
 
-                if self._use_posterior_this_transition(use_posterior, z_H.device):
+                if self._use_posterior_this_transition(use_posterior):
                     # KL 페널티는 마지막(grad) transition 에만 걸린다 (Eq 14) --
                     # 여기 no-grad transition 들은 샘플만 뽑는다.
                     u_y = z_H + y_emb
@@ -491,7 +509,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
         # ★ [B] 마지막 transition 도 scheduled sampling 대상이다.  prior 로 뽑히면
         #   q=p 라 KL 이 0 이므로 항 자체를 뺀다 (kl=None -> losses.py 가 0 처리).
-        use_post_last = self._use_posterior_this_transition(use_posterior, z_H.device)
+        use_post_last = self._use_posterior_this_transition(use_posterior)
         if use_post_last:
             u_y = z_H + y_emb
             mu_q = self.post_mu(u_y)

@@ -80,7 +80,7 @@ CUDA_VISIBLE_DEVICES=${GPUS} ${LAUNCH} \
   arch.H_cycles=3 arch.L_cycles=4 arch.halt_max_steps=16 \
   global_batch_size=768 \
   arch.kl_coef=${BETA} arch.noise_head_expansion=${NHEXP} \
-  arch.ss_prob=${SS_PROB} \
+  arch.ss_prob=${SS_PROB} arch.ss_seed=${SEED} \
   nodecay_logvar_bias=${NODECAY_LOGVAR_BIAS} nodecay_logvar_head=${NODECAY_LOGVAR_HEAD} \
   ema=${EMA} ema_rate=${EMA_RATE} lr_warmup_steps=${WARMUP} \
   +run_name=${RUN} \

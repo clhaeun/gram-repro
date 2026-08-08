@@ -133,7 +133,7 @@ CUDA_VISIBLE_DEVICES=${GPUS} ${LAUNCH} \
   arch.residual_scale=${RESIDUAL_SCALE} \
   arch.alpha_1_init=${ALPHA1} arch.alpha_2_init=${ALPHA2} \
   arch.eps_scale=${EPS_SCALE} arch.damping_eta=${DAMPING_ETA} \
-  arch.ss_prob=${SS_PROB} \
+  arch.ss_prob=${SS_PROB} arch.ss_seed=${SEED} \
   ema=${EMA} ema_rate=${EMA_RATE} lr_warmup_steps=${WARMUP} \
   +run_name=${RUN} \
   2>&1 | tee logs/${RUN}.log

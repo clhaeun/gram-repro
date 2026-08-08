@@ -342,11 +342,23 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
 
     ((1 / global_batch_size) * loss).backward()
 
+    # ★ grad 가 없는 파라미터를 0 으로 채워 all_reduce 대상 집합을 step 간 고정한다.
+    #   arch.ss_prob>0 이면 마지막 transition 이 prior 로 뽑힌 step 에서
+    #   post_mu(2) / post_logvar(2) / post_logvar_bias 5개가 grad=None 이 된다
+    #   (실측: ss_prob=0.0 -> 0/24개, ss_prob=0.5 -> 5/24개).  이 상태로
+    #   `if param.grad is not None` 를 두면 rank 마다 all_reduce 호출 횟수가 달라져
+    #   NCCL 이 교착한다 (62번 실측: 다중 GPU 4~6 step SIGABRT).
+    #   world_size 와 무관하게 채워야 단일 GPU 와 다중 GPU 의 optimizer 동작이 같다
+    #   (AdamW 는 grad=None 인 파라미터를 통째로 건너뛰지만 0 이면 wd/모멘텀이 돈다).
+    #   ss_prob=0.0 에서는 None 이 하나도 없어 비트 동일이다.
+    for param in train_state.model.parameters():
+        if param.grad is None:
+            param.grad = torch.zeros_like(param)
+
     # Allreduce
     if world_size > 1:
         for param in train_state.model.parameters():
-            if param.grad is not None:
-                dist.all_reduce(param.grad)
+            dist.all_reduce(param.grad)
 
     # gradient clipping 1.0
     torch.nn.utils.clip_grad_norm_(train_state.model.parameters(), 1.0)
