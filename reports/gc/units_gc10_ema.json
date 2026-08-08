@@ -1,0 +1,109 @@
+{
+  "checkpoint": "checkpoints/Graph-coloring-10-ACT-torch/gc10_paper_34/step_87620",
+  "n": 192,
+  "N": 20,
+  "seed": 0,
+  "nodes": 10,
+  "a_edges_per_graph": {
+    "mean": 16.692708333333332,
+    "std": 2.748929518606086,
+    "min": 11.0,
+    "max": 27.0
+  },
+  "model": {
+    "b_violated_edges_per_sample": {
+      "mean": 0.26796875,
+      "std": 0.5887973610307461,
+      "min": 0.0,
+      "max": 6.0
+    },
+    "c_violated_edges_sum_over_N": {
+      "mean": 5.359375,
+      "std": 6.0588275496206085,
+      "min": 0.0,
+      "max": 27.0
+    },
+    "d_violation_rate_pct": {
+      "mean": 1.6555232428901598,
+      "std": 3.5972625058014107,
+      "min": 0.0,
+      "max": 33.333333333333336
+    },
+    "e_nodes_in_conflict": {
+      "mean": 0.50390625,
+      "std": 1.0510338915615127,
+      "min": 0.0,
+      "max": 7.0
+    },
+    "f_wrongly_colored_nodes": {
+      "mean": 0.44244791666666666,
+      "std": 1.0107857130490088,
+      "min": 0.0,
+      "max": 6.0
+    }
+  },
+  "random": {
+    "b_violated_edges_per_sample": {
+      "mean": 5.534114583333333,
+      "std": 2.1481296970164516,
+      "min": 0.0,
+      "max": 17.0
+    },
+    "c_violated_edges_sum_over_N": {
+      "mean": 110.68229166666667,
+      "std": 20.252522964187214,
+      "min": 56.0,
+      "max": 176.0
+    },
+    "d_violation_rate_pct": {
+      "mean": 33.14773171356089,
+      "std": 11.736461474289772,
+      "min": 0.0,
+      "max": 85.71428571428571
+    },
+    "e_nodes_in_conflict": {
+      "mean": 7.002604166666667,
+      "std": 1.7320488498642215,
+      "min": 0.0,
+      "max": 10.0
+    },
+    "f_wrongly_colored_nodes": {
+      "mean": 3.7484375,
+      "std": 1.0389536283814997,
+      "min": 0.0,
+      "max": 6.0
+    }
+  },
+  "label": {
+    "b_violated_edges_per_sample": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "c_violated_edges_sum_over_N": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "d_violation_rate_pct": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "e_nodes_in_conflict": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "f_wrongly_colored_nodes": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  }
+}

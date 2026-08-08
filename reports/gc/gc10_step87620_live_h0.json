@@ -1,0 +1,47 @@
+{
+  "checkpoint": "checkpoints/Graph-coloring-10-ACT-torch/gc10_paper_34/step_87620.live",
+  "n": 192,
+  "N": 20,
+  "seed": 0,
+  "sigma_scale": 1.0,
+  "prior_all_samples": {
+    "conflicts_mean": 0.246875,
+    "conflicts_std": 0.5496121975614564
+  },
+  "majority_at_N_valid_canonical": 0.9010416666666666,
+  "verifier_selected_at_N_valid": 0.8958333333333334,
+  "coverage_at_20": {
+    "coverage": 0.5790012164474347,
+    "n_puzzles_scored": 192,
+    "n_puzzles_no_total": 0,
+    "found_mean": 3.9114583333333335,
+    "total_mean": 12.427083333333334,
+    "n_found_gt_total": 0,
+    "by_solution_bucket": {
+      "1": {
+        "n": 26,
+        "coverage": 0.9615384615384616,
+        "found_mean": 0.9615384615384616,
+        "total_mean": 1.0
+      },
+      "2-5": {
+        "n": 64,
+        "coverage": 0.7111979166666667,
+        "found_mean": 1.90625,
+        "total_mean": 2.828125
+      },
+      "6-20": {
+        "n": 73,
+        "coverage": 0.47501252552622414,
+        "found_mean": 4.986301369863014,
+        "total_mean": 11.36986301369863
+      },
+      "21+": {
+        "n": 29,
+        "coverage": 0.20605698371815315,
+        "found_mean": 8.275862068965518,
+        "total_mean": 46.51724137931034
+      }
+    }
+  }
+}

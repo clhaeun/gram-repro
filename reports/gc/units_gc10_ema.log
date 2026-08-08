@@ -1,0 +1,51 @@
+/home/chaeun/gram-repro/pretrain.py:287: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  state_dict = torch.load(config.load_checkpoint, map_location="cuda")
+TinyRecursiveReasoningModel_ACTV1(
+  (inner): TinyRecursiveReasoningModel_ACTV1_Inner(
+    (embed_tokens): CastedEmbedding()
+    (lm_head): CastedLinear()
+    (q_head): CastedLinear()
+    (puzzle_emb): CastedSparseEmbedding()
+    (rotary_emb): RotaryEmbedding()
+    (L_level): TinyRecursiveReasoningModel_ACTV1ReasoningModule(
+      (layers): ModuleList(
+        (0-1): 2 x TinyRecursiveReasoningModel_ACTV1Block(
+          (self_attn): Attention(
+            (qkv_proj): CastedLinear()
+            (o_proj): CastedLinear()
+          )
+          (mlp): SwiGLU(
+            (gate_up_proj): CastedLinear()
+            (down_proj): CastedLinear()
+          )
+        )
+      )
+    )
+    (prior_mu): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (prior_logvar): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (post_mu): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (post_logvar): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (lrpm_head): CastedLinear()
+  )
+)
+Loading checkpoint checkpoints/Graph-coloring-10-ACT-torch/gc10_paper_34/step_87620
+checkpoints/Graph-coloring-10-ACT-torch/gc10_paper_34/step_87620 n=192 nodes=10 N=20
+  (a) edges/graph      16.693 [11, 27] std 2.749
+  (b) viol edges/샘플   model 0.2680  random 5.5341
+  (c) viol edges sum20 model 5.3594  random 110.6823
+  (d) viol rate %      model 1.6555  random 33.1477
+  (e) nodes in conflict model 0.5039  random 7.0026
+  (f) wrong nodes      model 0.4424  random 3.7484
+  [out] reports/gc/units_gc10_ema.json

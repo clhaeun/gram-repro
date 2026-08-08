@@ -168,6 +168,11 @@ def main() -> None:
     ap.add_argument("--halt-max-steps", type=int, default=None)
     # 기본은 전수(422,786).  쓰면 결과 JSON 에 기록된다.
     ap.add_argument("--limit", type=int, default=None)
+    # 422k 를 여러 GPU 로 나눠 돌기 위한 연속 블록 분할.  --limit 적용 후에 자른다.
+    # 모든 지표가 퍼즐 평균이라 샤드별 n 가중평균으로 정확히 합쳐진다
+    # (experiments/merge_sudoku_shards.py).
+    ap.add_argument("--shard-index", type=int, default=0)
+    ap.add_argument("--shard-count", type=int, default=1)
     # ③ Figure 5 설계용.  §설계 확인 참조 -- 지금은 기본 off.
     ap.add_argument("--unconditional", action="store_true")
     args = ap.parse_args()
@@ -188,6 +193,12 @@ def main() -> None:
     n_total = len(inputs)
     if args.limit is not None:
         inputs, labels = inputs[: args.limit], labels[: args.limit]
+    # 연속 블록 샤딩.  경계는 np.linspace 로 잡아 전 샤드 합이 정확히 전수가 된다.
+    assert 0 <= args.shard_index < args.shard_count, "shard-index 범위 오류"
+    bounds = np.linspace(0, len(inputs), args.shard_count + 1).astype(int)
+    lo, hi = int(bounds[args.shard_index]), int(bounds[args.shard_index + 1])
+    shard_range = [lo, hi]
+    inputs, labels = inputs[lo:hi], labels[lo:hi]
     B = len(inputs)
 
     if args.unconditional:
@@ -205,6 +216,8 @@ def main() -> None:
         "checkpoint": os.path.join(args.ckpt_dir, args.step),
         "data": args.data,
         "n": B, "n_total_in_split": n_total, "limit": args.limit,
+        "shard_index": args.shard_index, "shard_count": args.shard_count,
+        "shard_range": shard_range,
         "N": args.N, "seed": args.seed,
         "sigma_scale": args.sigma_scale, "mu_scale": args.mu_scale,
         "halt_max_steps": net.model.config.halt_max_steps,
