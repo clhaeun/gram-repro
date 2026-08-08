@@ -1,0 +1,44 @@
+/home/chaeun/gram-repro/pretrain.py:259: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  state_dict = torch.load(config.load_checkpoint, map_location="cuda")
+TinyRecursiveReasoningModel_ACTV1(
+  (inner): TinyRecursiveReasoningModel_ACTV1_Inner(
+    (embed_tokens): CastedEmbedding()
+    (lm_head): CastedLinear()
+    (q_head): CastedLinear()
+    (puzzle_emb): CastedSparseEmbedding()
+    (rotary_emb): RotaryEmbedding()
+    (L_level): FixedPointTransformer(
+      (layers): ModuleList(
+        (0-1): 2 x FixedPointTransformerBlock(
+          (self_attn): Attention(
+            (qkv_proj): CastedLinear()
+            (o_proj): CastedLinear()
+          )
+          (mlp): SwiGLU(
+            (gate_up_proj): CastedLinear()
+            (down_proj): CastedLinear()
+          )
+        )
+      )
+    )
+    (prior_mu): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (prior_logvar): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (post_mu): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (post_logvar): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (lrpm_head): CastedLinear()
+  )
+)
+Loading checkpoint checkpoints/Nqueens-10-ACT-torch/nq10_A3p_fx_a7525_lr3e4/step_117544
+checkpoints/Nqueens-10-ACT-torch/nq10_A3p_fx_a7525_lr3e4/step_117544  hms=16 acc=0.0060 cov_row_macro@20=0.0428 cov_micro@20=0.0106 cov_puzzle_macro@20=0.0725 maj=0.0171 vsel=0.0034 qc=6.9593  [out] reports/stageA/nq10_nq10_A3p_fx_a7525_lr3e4_step117544_ema_h0.json
