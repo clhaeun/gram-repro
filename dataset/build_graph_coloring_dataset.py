@@ -222,9 +222,13 @@ def convert_subset(set_name: str, ids: List[int], Ccan: np.ndarray, bits: np.nda
 
             results["puzzle_indices"].append(example_id)
             results["puzzle_identifiers"].append(0)
-
-        # Push group
-        results["group_indices"].append(puzzle_id)
+            # 행 하나 = group 하나.  group 을 그래프 단위로 두면 sampler
+            # (puzzle_dataset.py:25) 가 그룹당 1행만 뽑아 epoch 당 색칠 1개씩만
+            # 학습되고 (gc8 1445/6996 = 20.7%, gc10 1088/13461 = 8.1%), step 수
+            # 계산(pretrain.py:256, groups/batch)도 같이 줄어든다.  nqueens 빌더가
+            # 커밋 05ba06c 에서 같은 결함을 같은 방식으로 고쳤다
+            # (build_nqueens_dataset.py:176-180).
+            results["group_indices"].append(puzzle_id)
 
     # To Numpy.  Tokens are already in vocab space (1/2 for the graph, 3/4/5 for
     # the colors, 0 = PAD/ignore in the label tail), so there is no +1 shift.
