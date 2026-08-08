@@ -110,6 +110,11 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     # 런처가 arch.ss_seed=${SEED} 로 넘겨 seed 별로 SS 패턴이 달라지게 한다.
     ss_seed: int = 0
 
+    # prior/post logvar head 에 더하는 학습가능 스칼라 bias 의 ★초기값★.
+    # logvar 이므로 sigma_init = exp(logvar_bias_init / 2) -- 0.0 이면 sigma 1.0,
+    # -4.0 이면 sigma 0.135 다.  0.0 = 현행과 비트 단위 동일.
+    logvar_bias_init: float = 0.0
+
 
 class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
     def __init__(self, config: TinyRecursiveReasoningModel_ACTV1Config) -> None:
@@ -223,10 +228,12 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         self.post_logvar = SwiGLU(hidden_size=D, expansion=nh_exp)
         self.lrpm_head = CastedLinear(D, 1, bias=True)
 
-        # prior/posterior logvar 헤드에 더하는 학습가능 스칼라 bias.  최종 설정 init 0.0
-        # (sigma=1.0 시작).  파라미터 자체는 state_dict 키이자 GRAM 노이즈 head 의 일부다.
-        self.prior_logvar_bias = nn.Parameter(torch.tensor(0.0))
-        self.post_logvar_bias = nn.Parameter(torch.tensor(0.0))
+        # prior/posterior logvar 헤드에 더하는 학습가능 스칼라 bias.  초기값은
+        # config.logvar_bias_init (기본 0.0 = sigma 1.0 시작) 이다.  파라미터 자체는
+        # state_dict 키이자 GRAM 노이즈 head 의 일부다.
+        _lv_init = float(self.config.logvar_bias_init)
+        self.prior_logvar_bias = nn.Parameter(torch.tensor(_lv_init))
+        self.post_logvar_bias = nn.Parameter(torch.tensor(_lv_init))
 
         # Test-time sampled latent std 조정 (논문 Table 3 ablation; harness 의
         # sigma_scale()/mu_scale() 컨텍스트가 이 속성을 바꾼다)
