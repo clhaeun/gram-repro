@@ -123,6 +123,25 @@ num_graphs −1(→`DEFAULT_NUM_GRAPHS`) / train_frac 0.85 / self_check True.
 md5 4/4 가 **수정 전 데이터(50번 보유)의 값과 일치** → group_indices 단독 변경이
 행 생성에 영향 없음이 실측 확인됐다.
 
+### 2-2a. ★ 런타임 반영 근거 — eval 간격 2,277
+
+정적 검증(총 step, group_indices 길이)은 파일만 본다. 수정이 **런타임 sampler 에
+실제로 걸렸는지**는 in-loop eval 간격으로 갈린다:
+
+| | eval_interval 250 epoch 이 도는 step 간격 | 산식 |
+|---|---|---|
+| **수정 후 (행 = group)** | **2,277** | 250 × **6996** / 768 |
+| 수정 전 (그래프 = group) | 470 | 250 × **1445** / 768 |
+
+`logs/gc8_paper_34.log` 실측: `[EVAL @ step 2277]`, 이후 4554 / 6831 / 9108 /
+11385 / 13662 / 15939 / 18216 / 20493 — **2,277 등간격**. `gc/n_eval=255.0000`
+(gc8 test 행 수와 일치).
+
+즉 `pretrain.py:256` 의 `total_steps = epochs × total_groups × mean_puzzle_examples
+/ global_batch_size` 와 `puzzle_dataset.py:209` 의 `rng.permutation(group_indices.size - 1)`
+가 둘 다 6,996 을 보고 있다. 파일 수준 검증(§2-2)에 더해, **런타임에서도 epoch
+당 전 (그래프, 색칠) 행을 본다**는 것이 이 값으로 확인된다.
+
 - `seq_len` gc8 28 / gc10 45, `vocab_size` 6, `num_puzzle_identifiers` 1,
   `puzzle_identifiers` 전 원소 0
 - `sidecar_gc_8.json` graphs 1700 (meta `p=0.5455 num_graphs=1700 seed=0`)
@@ -191,6 +210,39 @@ pretrain.py arch=gram_gc8 data_paths=[data/graph-coloring-8]
 
 ---
 
+## 3a. ★ 과거 Sudoku run 과의 축 비교 가능 여부 (값만)
+
+`all_config.yaml` 의 `data_paths` 실측:
+
+| run | data_paths | epochs | kl_coef |
+|---|---|---|---|
+| `gram_sudoku_paper` | `data/sudoku-extreme-1k-aug-1000-test10k` | 50000 | 0.1 |
+| `gram_sudoku_halt_only` | `data/sudoku-extreme-1k-aug-1000-test10k` | 50000 | 0.1 |
+| `gram_sudoku_lsum` | `data/sudoku-extreme-1k-aug-1000-test10k` | 50000 | 0.1 |
+| `gram_sudoku_lsum_exp` | `data/sudoku-extreme-1k-aug-1000-test10k` | 50000 | 0.1 |
+| `gram_sudoku_lmean_v2` | `data/sudoku-extreme-1k-aug-1000-test10k` | 50000 | 0.1 |
+| `gram_sudoku_lmean_ctrl` | `data/sudoku-extreme-1k-aug-1000-test10k` | 50000 | 0.1 |
+| `gram_sudoku_sigmabound` | `data/sudoku-extreme-1k-aug-1000-test10k` | 50000 | 0.1 |
+| `gram_sudoku_sigma_fix` | `data/sudoku-extreme-1k-aug-1000-test10k` | 50000 | 0.1 |
+| `gram_sudoku_long` | `data/sudoku-extreme-1k-aug-1000-test10k` | 100000 | 0.1 |
+| `gram_sudoku_b005` | `data/sudoku-extreme-1k-aug-1000-test10k` | 100000 | 0.05 |
+| `gram_mlp_t_sudoku` | `data/sudoku-extreme-1k-aug-1000` | 50000 | 0.1 |
+| **`sudoku_paper_34` (현행)** | `data/sudoku-extreme-1k-aug-1000-test10k-v2` | 50000 | 0.1 |
+
+판정 (값 기준):
+
+| 대조쌍 | in-loop eval 행 집합 | 비교 가능 여부 |
+|---|---|---|
+| 과거 `test10k` run 10건 vs 현행 `test10k-v2` | 양쪽 다 10,000행, `inputs` 배열 **완전 일치** (§1-3 실측: 같은 seed 42·idx) | **가능** |
+| `gram_mlp_t_sudoku` vs 현행 | 422,786행 vs 10,000행 | **불가** (행 집합 다름) |
+| 임의 과거 run vs 최종 harness 축 | 10,000행 vs 422,786행 | **불가** (행 집합 다름) |
+
+즉 손상됐던 것은 `puzzle_indices` / `group_indices` / `dataset.json` 이고,
+`inputs` / `labels` 행 집합 자체는 구 `test10k` 와 `test10k-v2` 가 동일하다.
+in-loop eval 행 집합 기준으로는 과거 `test10k` run 10건과 현행 run 이 같은 축이다.
+
+---
+
 ## 4. 참고 확인 — puzzle embedding (값만, 설정 변경 없음)
 
 논문 Table 6 은 Sudoku·N-Queens·GC 전부 "Puzzle Emb ✗" 인데 우리 config 는
@@ -215,3 +267,19 @@ nq10 A0(96.22) = `nq10_repro_s0`
 `num_puzzle_identifiers` 가 1이면 전 퍼즐 공용 학습 prefix 라 논문의
 "task-specific puzzle embedding 없음" 과 모순되지 않을 수 있다. **설정은 바꾸지
 않았다** — nq 재현과의 일관성이 우선이다.
+
+---
+
+## 5. 로깅 축 실측 (진행 보고용)
+
+`scripts/progress_report_34.py` 가 eval 시점 표를 뽑는다. 축별 가용 여부:
+
+| 축 | 가용 | 근거 |
+|---|---|---|
+| train acc / eval acc / kl_loss | ✅ stdout + wandb | `pretrain.py:672`, `:698` |
+| **grad_norm** | ❌ **미기록** | `pretrain.py:364` 가 `clip_grad_norm_(..., 1.0)` 로 클립만 하고 반환값을 metrics 에 넣지 않는다. wandb 키 목록에도 없다 (실측). |
+| `diag/z_h_norm` · `diag/eps_std_norm` · `diag/eps_mu_norm` | ✅ **wandb 만** | `gram.py:335-339` `_latent_diag` → `losses.py:113-114` → `pretrain.py:398`. stdout 은 `pretrain.py:671` 이 `'loss'`/`'accuracy'` 포함 키만 걸러 프린트하므로 로그 파일에는 안 나온다. |
+
+전 diag 키 (run 당 기록): `train/diag/{z_h_norm, z_l_norm, eps_mu_norm,
+eps_std_norm, train_kl_t1..t3, train_mu_absmean_t1..t3, train_std_mean_t1..t3,
+train_std_dimstd_t1..t3}`.
