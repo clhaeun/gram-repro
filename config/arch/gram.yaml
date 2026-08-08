@@ -29,3 +29,20 @@ no_ACT_continue: True
 kl_coef: 0.1        # KL 가중치
 kl_balance: 0.8     # KL balancing 비율
 lprm_coef: 1.0
+
+# ---- struct 선언 (기본값 = 현행과 비트 단위 동일) ------------------------------
+# ★ pydantic 선언만으로는 부족하다 -- hydra arch config 는 struct 라 여기 없으면
+#   arch.<필드> 오버라이드가 'Key not in struct' 로 즉사한다.
+#   (reports/VERIFY_CHECKLIST.md (a) 참조)
+
+# ε 주입 계수. 1.0 = z_H = z_H + eps (현행).
+eps_scale: 1.0
+# inner z_L loop damped update. 1.0 = 감쇠 없음 (현행).
+damping_eta: 1.0
+# 진단 B+ (측정 전용): transition 별 KL/μ/σ 기록. False = 현행과 비트 단위 동일.
+diag_kl_per_transition: False
+# scheduled sampling: 학습 중 각 transition 에서 확률 ss_prob 로 prior 를 쓴다.
+# 0.0 = 현행과 비트 단위 동일.
+ss_prob: 0.0
+# SS 분기 전용 RNG 시드. ★ rank 무관해야 한다 (gram.py 의 _ss_gen 주석).
+ss_seed: 0
