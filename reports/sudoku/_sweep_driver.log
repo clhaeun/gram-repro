@@ -1,0 +1,7 @@
+[done] sigma=0.75 gpu=7 1305s
+[done] sigma=1.0 gpu=6 1324s
+[done] sigma=0.25 gpu=7 1305s
+[done] sigma=0.5 gpu=6 1324s
+[done] sigma=1.5 gpu=7 1306s
+[done] sigma=0.1 gpu=6 1339s
+[ALL DONE]

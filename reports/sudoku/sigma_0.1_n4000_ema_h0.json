@@ -1,0 +1,50 @@
+{
+  "checkpoint": "checkpoints/Sudoku-extreme-1k-aug-1000-test10k-v2-ACT-torch/sudoku_paper_34/step_65100",
+  "data": "data/sudoku-extreme-1k-aug-1000/test",
+  "n": 4000,
+  "n_total_in_split": 422786,
+  "limit": 4000,
+  "shard_index": 0,
+  "shard_count": 1,
+  "shard_range": [
+    0,
+    4000
+  ],
+  "N": 20,
+  "seed": 0,
+  "sigma_scale": 0.1,
+  "mu_scale": 1.0,
+  "halt_max_steps": 16,
+  "unconditional": false,
+  "prior_all_samples": {
+    "exact": 0.59585,
+    "solved": 0.59585,
+    "valid": 0.598625,
+    "consistent": 0.997225,
+    "digits_ok": 1.0,
+    "violations_mean": 7.883775,
+    "clue_breaks_mean": 0.002775
+  },
+  "pass_at_N": {
+    "exact": 0.817,
+    "solved": 0.817
+  },
+  "majority_at_N": {
+    "exact": 0.7715,
+    "solved": 0.7715,
+    "valid": 0.77375,
+    "consistent": 0.99775,
+    "digits_ok": 1.0,
+    "violations_mean": 4.4195,
+    "clue_breaks_mean": 0.00225
+  },
+  "verifier_selected_at_N": {
+    "exact": 0.81375,
+    "solved": 0.81375,
+    "valid": 0.819,
+    "consistent": 0.99475,
+    "digits_ok": 1.0,
+    "violations_mean": 2.31475,
+    "clue_breaks_mean": 0.00525
+  }
+}
