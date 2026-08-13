@@ -1,13 +1,4 @@
-"""N-Queens / GC harness 공용 부분.
-
-GRAM 의 latent transition 은 확률적이라 같은 입력에 K 번 forward 하면 그것만으로
-서로 다른 K 개의 답이 나온다.  따라서 rollout 은 단순 반복이며 TRM 과 달리
-test-time augmentation(대칭 변환·역매핑)을 쓰지 않는다.
-
-  load_model()                checkpoint -> eager ACTLossHead
-  rollout()                   K 회 forward -> preds / v_logits / token accuracy
-  sigma_scale(), mu_scale()   rollout 의 추론시 스케일링 컨텍스트
-"""
+"""N-Queens / GC harness 공용 부분 (load_model / rollout / sigma_scale / mu_scale)."""
 import os
 from contextlib import contextmanager
 
@@ -24,17 +15,11 @@ PAD = 0                 # dataset.json: pad_id = ignore_label_id = 0
 # checkpoint / data loading
 # --------------------------------------------------------------------------- #
 def load_model(ckpt_dir, step):
-    """all_config.yaml + load_checkpoint 로 eager ACTLossHead 를 만든다 (ema=False).
-
-    torch.compile 을 ._orig_mod 로 벗겨 반환해야 sigma_scale 속성이 retrace 없이 먹는다.
-    """
     cfg = OmegaConf.load(os.path.join(ckpt_dir, "all_config.yaml"))
     cfg.load_checkpoint = os.path.join(ckpt_dir, step)
     cfg.ema = False                  # checkpoint is already the EMA copy
     cfg.eval_save_outputs = []
     cfg.evaluators = []
-    # 추론 전용이라 꺼야 한다.  load_state_dict(assign=True) 가 Parameter 를 교체하면서
-    # _no_weight_decay 마킹이 사라져 _adamw_param_arg 가 ValueError 를 낸다.
     cfg.nodecay_marked = False
     config = P.PretrainConfig(**OmegaConf.to_container(cfg, resolve=True))
 
@@ -79,13 +64,6 @@ def sigma_scale(net, scale):
 
 @contextmanager
 def mu_scale(net, scale):
-    """Scale the guide (mu) before sampling.  scale=0 -> "stochasticity only"
-    (eps = sigma * noise, guide removed).  scale=1 (default) is a no-op wrapper
-    that returns exactly what reparameterize returned before, so the normal path
-    stays bit-identical.
-
-    추론 시 스케일링이라 학습 시 ablation 인 Table 3b 와 직접 대응하지 않는다.
-    """
     if float(scale) == 1.0:                 # no-op: do not even wrap
         yield
         return

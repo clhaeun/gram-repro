@@ -1,28 +1,4 @@
-"""N-Queens constraint evaluator.
-
-GRAM 논문 Table 1의 N-Queens "Accuracy"는 라벨 일치가 아니라 **제약 만족** 기준이다.
-같은 input에 여러 개의 완성해가 대응하므로(multi-solution), in-loop의
-exact_accuracy(라벨 일치)는 구조적으로 0에 가깝고 논문 수치와 대응하지 않는다.
-
-이 evaluator는 eval 배치마다 예측 보드를 규칙으로 검증해 논문과 비교 가능한
-single-sample accuracy를 찍는다.
-
-  valid      : queen이 정확히 n개 + row/col/두 대각선에 중복 없음
-  consistent : 입력에 주어진 queen을 모두 보존
-  strict     : valid & consistent   <- 헤드라인
-
-consistent는 논문에 명시되지 않은 조건이다. 이것이 없으면 입력을 무시하고
-아무 valid 보드나 출력해도 만점이 되므로, strict를 헤드라인으로 쓰되
-valid도 함께 로깅해 정의 차이를 사후에 분리할 수 있게 한다.
-
-Coverage(Table 1)는 한 input당 N개 샘플이 필요하므로 여기서 계산하지 않는다.
-in-loop eval은 input당 1샘플이다. coverage는 experiments/eval_harness.py 담당.
-
-vocab: 0=pad, 1=empty, 2=queen
-
-사용법 (launch 커맨드):
-    evaluators="[nqueens@NQueens]"
-"""
+"""N-Queens 제약 평가기 (evaluators=[nqueens@NQueens])."""
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -33,17 +9,6 @@ QUEEN = 2
 
 
 def queen_key(board: np.ndarray) -> tuple:
-    """해 유일화(dedupe)용 정규 키 = 퀸 칸 인덱스만.
-
-    verify_boards 는 `preds == QUEEN` 만 읽으므로 빈칸 토큰 값(1 / PAD 0 / 그 외)은
-    valid·consistent 판정에 들어가지 않는다.  그런데 `tuple(board)` 로 유일화하면
-    퀸 배치가 같아도 빈칸 토큰 하나가 다르면 서로 다른 해로 세어져 found 가 부풀고
-    n_found_gt_total 이 0 을 넘는다 (FPRM S3 가 빈칸에 PAD 0 을 섞어 내는 사례:
-    reports/RESULT_found_gt_total_50.md).  퀸 위치만으로 키를 만들어 그 경로를 막는다.
-
-    소비자: experiments/sweep_harness.py · experiments/coverage_curve.py ·
-    experiments/perpuzzle_dump.py · /workspace/fprm/experiments/fprm_harness.py
-    """
     return tuple(np.flatnonzero(board == QUEEN).tolist())
 
 

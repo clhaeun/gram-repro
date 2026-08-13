@@ -1,11 +1,4 @@
-"""N-Queens harness -- 논문 지표 ① Accuracy ③ Coverage@20 ④ majority@20 ⑤ verifier@20.
-
-샘플링 RNG 는 gram_harness.rollout (seed*100003+k).
---sigma-scale / --mu-scale 은 추론 시 스케일링이라 학습 시 ablation 인 Table 3b 와
-직접 대응하지 않는다.
-
-사용: python experiments/sweep_harness.py --ckpt-dir <dir> --step step_N --out <json>
-"""
+"""N-Queens harness. --ckpt-dir <dir> --step step_N --out <json>"""
 import argparse, hashlib, json, os, sys
 from collections import Counter
 
@@ -18,12 +11,6 @@ from evaluators.nqueens import queen_key, verify_boards    # noqa: E402
 
 
 def flat_stats(preds, inputs, n):
-    """① Accuracy (Table 1 single-sample): 전 샘플 각각 채점한 valid 평균.
-
-    queen_count_* 는 같은 K*B 전샘플 축의 통계다.  학습 로그의
-    `nqueens/queen_count_mean` 은 in-loop eval 의 단일 샘플 축이라 눈금이 다르다 --
-    직접 비교 금지 (사수 지시 2026-08-06 로 harness 축을 추가 산출).
-    """
     K, B, L = preds.shape
     r = verify_boards(preds.reshape(K * B, L), np.tile(inputs, (K, 1)), n)
     qc = r["queen_count"]
@@ -33,12 +20,10 @@ def flat_stats(preds, inputs, n):
 
 
 def majority_row(rows):
-    """④ majority@20 (§2.3 방법 1): 최빈 보드 1개, 동률은 첫 등장."""
     return np.array(Counter(tuple(r) for r in rows).most_common(1)[0][0], dtype=np.int64)
 
 
 def solution_counts(inputs, sidecar_path):
-    """total(x) = sidecar 의 per-x 전체 해 개수 (라벨 개수 아님).  키 sha1[:16], 실패 -1."""
     tbl = json.load(open(sidecar_path))["inputs"]
     out = np.full(len(inputs), -1, dtype=np.int64)
     for i, row in enumerate(inputs):
@@ -52,11 +37,6 @@ SOL_BUCKETS = [("1", 1, 1), ("2-5", 2, 5), ("6-20", 6, 20), ("21+", 21, 10 ** 9)
 
 
 def coverage_at_N(cand, inputs, n, totals):
-    """③ Coverage@20 (Table 1): mean_x(found/total).  found = valid∧consistent unique
-    (힌트 어긴 valid 보드는 해집합 밖이라 consistent 필수 -- n_found_gt_total=0 이 검산).
-
-    유일화 키는 nqueens.queen_key (퀸 칸 인덱스) -- 토큰 벡터 유일화가 아니다.
-    """
     N, B, L = cand.shape
     r = verify_boards(cand.reshape(N * B, L), np.tile(inputs, (N, 1)), n)
     ok = (r["valid"] & r["consistent"]).reshape(N, B)
@@ -78,14 +58,9 @@ def coverage_at_N(cand, inputs, n, totals):
              found_mean=(float(found[m].mean()) if m.any() else None),
              total_mean=(float(totals[m].mean()) if m.any() else None))
         for name, lo, hi in SOL_BUCKETS for m in [have & (totals >= lo) & (totals <= hi)]]
-    # pair 확장 test 에서 입력(퍼즐) 축 재집계용 행 원자료
     ihash = [hashlib.sha1(v.astype(np.uint8).tobytes()).hexdigest()[:16] for v in inputs]
     res["per_row"] = {
         "ihash": ihash, "totals": totals.tolist(), "found": found.tolist()}
-    # coverage 축 3종은 눈금이 다르다 -- 인용 시 어느 축인지 밝힐 것.
-    #   coverage                 행 축 macro
-    #   found_mean/total_mean    micro (합계비)
-    #   coverage_macro_by_input  퍼즐 축 macro
     agg = {}
     for h, t, f in zip(ihash, totals.tolist(), found.tolist()):
         if t > 0:
@@ -104,25 +79,16 @@ def main():
     ap.add_argument("--n", type=int, default=8)
     ap.add_argument("--N", type=int, default=20)
     ap.add_argument("--seed", type=int, default=0)
-    # 추론 시 스케일링.  학습 시 ablation 인 논문 Table 3b 와 직접 대응하지 않는다.
     ap.add_argument("--sigma-scale", type=float, default=1.0)  # 0 = guide only
     ap.add_argument("--mu-scale", type=float, default=1.0)     # 0 = stochasticity only
     ap.add_argument("--sidecar", default="data/nqueens-8/sidecar_8.json")
-    # N_sup 외삽용. None = 오버라이드 없음 (체크포인트 학습값 그대로).
-    # eval 에선 gram.py 의 halted = (new_steps >= halt_max_steps) 만 남으므로 N_sup = 이 값.
     ap.add_argument("--halt-max-steps", type=int, default=None)
-    # 측정 전용.  transition 별 KL/μ/σ 를 <out>.diagkl.json 에 따로 쓴다.
-    # --out 본 JSON 은 이 플래그 유무와 무관하게 같아야 한다 (궤적 불변 검증).
-    ap.add_argument("--diag-kl", action="store_true")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
     net, _ = load_model(args.ckpt_dir, args.step)
     if args.halt_max_steps is not None:
-        net.model.config.halt_max_steps = args.halt_max_steps   # inner 와 공유 객체
-    if args.diag_kl:
-        net.model.config.diag_kl_per_transition = True          # inner 와 공유 객체
-        net.model.inner.diag_kl_reset()
+        net.model.config.halt_max_steps = args.halt_max_steps
     inputs = np.load(f"{args.data}/all__inputs.npy").astype(np.int64)
     labels = np.load(f"{args.data}/all__labels.npy").astype(np.int64)
     B = len(inputs)
@@ -145,7 +111,7 @@ def main():
     c = res["coverage_at_20"]
     if c["n_found_gt_total"]:
         print(f"WARNING: n_found_gt_total={c['n_found_gt_total']} (0 이어야 정상)")
-    cov_micro = c["found_mean"] / c["total_mean"]        # 합계비 = micro
+    cov_micro = c["found_mean"] / c["total_mean"]
     print(f"{res['checkpoint']}  hms={res['halt_max_steps']} "
           f"acc={res['prior_all_samples']['valid']:.4f} "
           f"cov_row_macro@{args.N}={c['coverage']:.4f} "
@@ -154,7 +120,6 @@ def main():
           f"maj={res['majority_at_N_valid']:.4f} "
           f"vsel={res['verifier_selected_at_N_valid']:.4f} "
           f"qc={res['prior_all_samples']['queen_count_mean']:.4f}  [out] {args.out}")
-    # 쓰기가 실패해도 stdout 으로 전량 덤프해 로그에서 복구할 수 있게 한다.
     try:
         os.makedirs(os.path.dirname(args.out), exist_ok=True)
         with open(args.out, "w") as f:
@@ -163,16 +128,6 @@ def main():
         print(f"!!! WRITE FAILED {args.out}: {e}\n"
               f"!!! 아래 RESULT_JSON 한 줄이 전량 산출물이다 (복구용)", flush=True)
         print("RESULT_JSON " + json.dumps(res), flush=True)
-
-    # 진단은 반드시 별도 파일 -- 본 JSON 에 섞으면 on/off md5 대조가 깨진다.
-    if args.diag_kl:
-        dk = net.model.inner.diag_kl_result()
-        dk_out = os.path.splitext(args.out)[0] + ".diagkl.json"
-        with open(dk_out, "w") as f:
-            json.dump({"checkpoint": res["checkpoint"], "H_cycles": net.model.config.H_cycles,
-                       "n_forwards": net.model.inner.diag_kl_n, "per_transition": dk}, f, indent=2)
-        print(f"  [diag-kl] {dk_out}  " +
-              " ".join(f"{k.split('/')[-1]}={v:.4g}" for k, v in dk.items() if "/kl_t" in k))
 
 
 if __name__ == "__main__":

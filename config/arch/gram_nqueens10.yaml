@@ -44,12 +44,6 @@ noise_head_expansion: 1.5
 
 # 진단 B+ (측정 전용): transition 별 KL/μ/σ 기록. False = 현행과 비트 단위 동일.
 # ★ pydantic 선언만으로는 부족하다 -- hydra arch config 는 struct 라 여기 없으면
-#   arch.diag_kl_per_transition 오버라이드가 'Key not in struct' 로 즉사한다.
-diag_kl_per_transition: False
 
-# scheduled sampling: 학습 중 각 transition 에서 확률 ss_prob 로 prior 를 쓴다.
 # 0.0 = 현행과 비트 단위 동일.  ★ struct 선언 필수 (위와 같은 이유).
-ss_prob: 0.0
 # SS 분기 전용 RNG 시드. ★ rank 무관해야 한다 (gram.py 의 _ss_gen 주석).
-#   런처가 arch.ss_seed=${SEED} 로 넘긴다.
-ss_seed: 0

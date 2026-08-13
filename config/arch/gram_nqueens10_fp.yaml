@@ -43,27 +43,16 @@ kl_coef: 0.045      # KL 가중치 (beta), nq10 final 라운드 값 (sum 눈금)
 kl_balance: 0.8
 lprm_coef: 1.0
 
-# ε 주입 계수 (z_H = z_H + eps_scale*eps). 1.0 = 현행과 비트 단위 동일.
-# ★ hydra arch config 는 struct 라 여기 선언하지 않으면 arch.eps_scale 오버라이드가
 #   'Key not in struct' 로 즉사한다 -- pydantic 선언만으로는 부족하다.
-eps_scale: 1.0
 
 # inner z_L loop damped update (z_L <- eta*z_tilde + (1-eta)*z_L). 1.0 = 비트 동일.
-# ★ eps_scale 과 같은 이유로 여기(struct) 선언이 반드시 필요하다.
-damping_eta: 1.0
 
 noise_head_expansion: 1.5
 
 # 진단 B+ (측정 전용): transition 별 KL/μ/σ 기록. False = 현행과 비트 단위 동일.
-# ★ eps_scale 과 같은 이유로 여기(struct) 선언이 반드시 필요하다.
-diag_kl_per_transition: False
 
-# scheduled sampling: 학습 중 각 transition 에서 확률 ss_prob 로 prior 를 쓴다.
 # 0.0 = 현행과 비트 단위 동일.  ★ struct 선언 필수 (위와 같은 이유).
-ss_prob: 0.0
 # SS 분기 전용 RNG 시드. ★ rank 무관해야 한다 (gram.py 의 _ss_gen 주석).
-#   런처가 arch.ss_seed=${SEED} 로 넘긴다.
-ss_seed: 0
 
 # ---- FPRM 기여1 (use_fp_transformer 외 나머지는 dataclass default 가 이미 활성값이지만
 #      사후 추적을 위해 전부 명시한다) --------------------------------------------

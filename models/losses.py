@@ -87,14 +87,12 @@ class ACTLossHead(nn.Module):
         lm_loss = (self.loss_fn(outputs["logits"], labels, ignore_index=IGNORE_LABEL_ID, valid_mask=mask) / loss_divisor).sum()
         q_halt_loss = F.binary_cross_entropy_with_logits(outputs["q_halt_logits"], seq_is_correct.to(outputs["q_halt_logits"].dtype), reduction="sum")
         
-        # KL reduction 은 sum 고정 (D축 -> L축 -> batch).  mean 은 run 을 붕괴시킨다.
-        kl_loss = torch.zeros((), device=lm_loss.device)   # 추론(prior) 시 kl 없음
+        kl_loss = torch.zeros((), device=lm_loss.device)
         if outputs.get("kl") is not None:
             kl_loss = outputs["kl"].sum(-1).sum(-1).sum()
 
         lprm_loss = torch.zeros((), device=lm_loss.device)
         if "lrpm_logits" in outputs:
-            # LPRM (Appendix A.2 Eq.16): r = 최종 출력 정확도, L = Σ_t (v_ψ(z_t) - r)²
             r = (is_correct.to(torch.float32) / loss_divisor).sum(-1).detach()
             lprm_loss = ((outputs["lrpm_logits"] - r.unsqueeze(-1)) ** 2).sum(-1).sum()
 
@@ -104,9 +102,6 @@ class ACTLossHead(nn.Module):
             "kl_loss": kl_loss.detach(),
             "lprm_loss": lprm_loss.detach(),
         })
-
-        if outputs.get("diag") is not None:
-            metrics.update(outputs["diag"])
 
         q_continue_loss = 0
         if "target_q_continue" in outputs:
@@ -120,5 +115,4 @@ class ACTLossHead(nn.Module):
         kl_coef   = getattr(self.model.config, "kl_coef", 0.0)
         lprm_coef = getattr(self.model.config, "lprm_coef", 1.0)
 
-        # Total loss (기존 TRM loss + kl_loss + lprm_loss)
         return new_carry, lm_loss + kl_coef * kl_loss + 0.5 * (q_halt_loss + q_continue_loss) + lprm_coef * lprm_loss, metrics, detached_outputs, new_carry.halted.all()

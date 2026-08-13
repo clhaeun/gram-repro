@@ -36,16 +36,10 @@ lprm_coef: 1.0
 #   (reports/VERIFY_CHECKLIST.md (a) 참조)
 
 # ε 주입 계수. 1.0 = z_H = z_H + eps (현행).
-eps_scale: 1.0
 # inner z_L loop damped update. 1.0 = 감쇠 없음 (현행).
-damping_eta: 1.0
 # 진단 B+ (측정 전용): transition 별 KL/μ/σ 기록. False = 현행과 비트 단위 동일.
-diag_kl_per_transition: False
-# scheduled sampling: 학습 중 각 transition 에서 확률 ss_prob 로 prior 를 쓴다.
 # 0.0 = 현행과 비트 단위 동일.
-ss_prob: 0.0
 # SS 분기 전용 RNG 시드. ★ rank 무관해야 한다 (gram.py 의 _ss_gen 주석).
-ss_seed: 0
 # prior/post logvar bias 의 초기값. sigma_init = exp(logvar_bias_init/2).
 # 0.0 = sigma 1.0 (현행과 비트 단위 동일), -4.0 = sigma 0.135.
 logvar_bias_init: 0.0

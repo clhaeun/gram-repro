@@ -1,31 +1,4 @@
-"""3-Graph-Coloring constraint evaluator.
-
-Same philosophy as ``evaluators/nqueens.py``: the paper's Graph Coloring
-"Accuracy" is **constraint satisfaction**, not label match.  A graph usually has
-many proper 3-colorings, so in-loop ``exact_accuracy`` (label match) is
-structurally near zero and does not correspond to the paper's number.
-
-  valid      : every edge joins two different colors, and all n node positions
-               actually carry a color token (3/4/5)
-  conflicts  : number of edges whose endpoints share a color  (0 <=> valid,
-               given colors_ok)
-  colors_ok  : all n node positions decoded to a legal color token
-
-Unlike N-Queens there is no "consistent" notion: the input is the graph itself,
-not a partial answer, so there is nothing from the input to preserve in the
-output.  ``valid`` is therefore the headline.
-
-Encoding (see ``dataset/build_graph_coloring_dataset.py``)
-    inputs : upper triangle of the adjacency matrix, ``np.triu_indices(n, 1)``
-             order, tokens 1 = no edge, 2 = edge.  seq_len = n(n-1)/2.
-    labels : node colors in the first n positions, tokens 3/4/5; the rest is 0
-             (ignored by the loss).
-
-vocab: 0=pad/ignore, 1=no edge, 2=edge, 3=red, 4=blue, 5=green
-
-사용법 (launch 커맨드):
-    evaluators="[graph_coloring@GraphColoring]"
-"""
+"""3-Graph-Coloring 제약 평가기 (evaluators=[graph_coloring@GraphColoring])."""
 from typing import Any, Dict, Optional
 
 import numpy as np

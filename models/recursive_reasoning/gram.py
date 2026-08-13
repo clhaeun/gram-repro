@@ -82,15 +82,7 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     kl_balance: float = 0.8
     lprm_coef: float = 1.0
 
-    eps_scale: float = 1.0
-    damping_eta: float = 1.0
-
     noise_head_expansion: float = 4.0
-
-    diag_kl_per_transition: bool = False
-
-    ss_prob: float = 0.0
-    ss_seed: int = 0  # rank 에 의존하면 안 된다 -- _ss_gen 주석 참조
 
     logvar_bias_init: float = 0.0
 
@@ -210,14 +202,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
         self.sigma_scale = 1.0
 
-        self.diag_kl_sum: Dict[str, float] = {}
-        self.diag_kl_n: int = 0
-
-        # rank 무관한 시드를 쓴다.  전역 RNG 는 rank 마다 시드가 달라(pretrain.py)
-        # 분기가 갈리고, all_reduce 호출 집합이 어긋나 NCCL 이 교착한다.
-        self._ss_gen = torch.Generator()
-        self._ss_gen.manual_seed(self.config.ss_seed * 1000003 + 777)
-
 
     def _input_embeddings(self, input: torch.Tensor, puzzle_identifiers: torch.Tensor):
         # Token embedding
@@ -243,7 +227,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
 
     def _y_embeddings(self, labels):
-        # 0.573 = embed_tokens 노름(12.97) / ‖z_H‖(22.63) 실측 비율.
         labels = torch.where(labels==IGNORE_LABEL_ID, 0, labels)
         oh = F.one_hot(labels.to(torch.int64), num_classes=self.config.vocab_size)
         embedding = F.pad(oh.to(self.forward_dtype),
@@ -265,78 +248,10 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         return b * _kl(mu_q.detach(), logvar_q.detach(), mu_p, logvar_p) + (1 - b) * _kl(mu_q, logvar_q, mu_p.detach(), logvar_p.detach())
 
 
-    def _use_posterior_this_transition(self, use_posterior: bool) -> bool:
-        # ss_prob=0.0 에서는 torch.rand 를 부르지 않는다 -- 부르면 RNG 소비가 달라져
-        # 기존 run 과 비트 동일성이 깨진다.
-        if not use_posterior:
-            return False
-        if self.config.ss_prob <= 0.0:
-            return True
-        return bool(torch.rand((), generator=self._ss_gen) >= self.config.ss_prob)
-
-
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5*logvar) * self.sigma_scale
         eps = torch.randn_like(std)
         return mu + eps * std
-
-
-    @torch.no_grad()
-    def _latent_diag(self, z_H, z_L, mu, logvar):
-        return {
-            "diag/z_h_norm": z_H.detach().float().norm(dim=-1).mean(),
-            "diag/z_l_norm": z_L.detach().float().norm(dim=-1).mean(),
-            "diag/eps_mu_norm": mu.detach().float().norm(dim=-1).mean(),
-            "diag/eps_std_norm": (torch.exp(0.5 * logvar.detach().float()) * self.sigma_scale).norm(dim=-1).mean(),
-        }
-
-
-    @torch.no_grad()
-    def _record_train_diag(self, t: int, mu_q, logvar_q, mu_p, logvar_p, dst: dict, kl=None):
-        std_q = torch.exp(0.5 * logvar_q.detach().float())
-        if kl is None:
-            kl = self.kl_loss(mu_q, logvar_q, mu_p, logvar_p)
-        dst[f"diag/train_kl_t{t}"] = kl.detach().sum(-1).sum(-1).mean()
-        dst[f"diag/train_std_mean_t{t}"] = std_q.mean()
-        dst[f"diag/train_std_dimstd_t{t}"] = std_q.std(dim=-1).mean()
-        dst[f"diag/train_mu_absmean_t{t}"] = mu_q.detach().float().abs().mean()
-
-
-    def diag_kl_reset(self):
-        self.diag_kl_sum = {}
-        self.diag_kl_n = 0
-
-
-    def diag_kl_result(self):
-        if self.diag_kl_n == 0:
-            return None
-        return {k: v / self.diag_kl_n for k, v in sorted(self.diag_kl_sum.items())}
-
-
-    @torch.no_grad()
-    def _diag_kl_accumulate(self, dst: dict):
-        for k, v in dst.items():
-            self.diag_kl_sum[k] = self.diag_kl_sum.get(k, 0.0) + float(v)
-        self.diag_kl_n += 1
-
-
-    @torch.no_grad()
-    def _record_diag_kl(self, t: int, z_H, y_emb, mu_p, logvar_p, dst: dict):
-        # 측정 전용.  여기서 만든 mu_q 로 eps 를 뽑거나 z_H 를 갱신하면 궤적이 바뀐다.
-        u_y = z_H + y_emb
-        mu_q = self.post_mu(u_y)
-        logvar_q = self.post_logvar(u_y) + self.post_logvar_bias
-        kl = self.kl_loss(mu_q, logvar_q, mu_p, logvar_p)
-        std_q = torch.exp(0.5 * logvar_q.float())
-        dst[f"diag/kl_t{t}"] = kl.sum(-1).sum(-1).mean()
-        # *_norm 은 per-position L2(D축) 뒤 나머지 축 평균, *_absmean/*_mean 은
-        # (B,L,D) 전체 element 평균 -- 두 축은 sqrt(D) 만큼 눈금이 다르다.
-        dst[f"diag/eps_mu_norm_t{t}"] = mu_q.float().norm(dim=-1).mean()
-        dst[f"diag/eps_std_norm_t{t}"] = std_q.norm(dim=-1).mean()
-        dst[f"diag/eps_mu_absmean_t{t}"] = mu_q.float().abs().mean()
-        dst[f"diag/eps_std_mean_t{t}"] = std_q.mean()
-        dst[f"diag/eps_std_dimstd_t{t}"] = std_q.std(dim=-1).mean()
-
 
 
     def empty_carry(self, batch_size: int):
@@ -358,14 +273,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
         y_emb = self._y_embeddings(batch["labels"]) if use_posterior else None
 
-        train_diag = {} if use_posterior else None
-
-        diag_kl_dst = None
-        diag_kl_y = None
-        if self.config.diag_kl_per_transition:
-            diag_kl_dst = {}
-            diag_kl_y = y_emb if y_emb is not None else self._y_embeddings(batch["labels"])
-
         seq_info = dict(
             cos_sin=self.rotary_emb() if hasattr(self, "rotary_emb") else None,
         )
@@ -374,84 +281,50 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         input_embeddings = self._input_embeddings(batch["inputs"], batch["puzzle_identifiers"])
 
         # Forward iterations
-        it = 0
         z_H, z_L = carry.z_H, carry.z_L
         lrpm_z = []
 
         # H_cycles-1 without grad
         with torch.no_grad():
             for _H_step in range(self.config.H_cycles-1):
-                t = _H_step + 1
                 for _L_step in range(self.config.L_cycles):
-                    z_tilde = self.L_level(z_L, z_H + input_embeddings, **seq_info)
-                    if self.config.damping_eta != 1.0:
-                        z_L = self.config.damping_eta * z_tilde \
-                              + (1.0 - self.config.damping_eta) * z_L
-                    else:
-                        z_L = z_tilde
+                    z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
 
                 z_H = self.L_level(z_H, z_L, **seq_info)
 
-                mu_p = self.prior_mu(z_H)
-                logvar_p = self.prior_logvar(z_H) + self.prior_logvar_bias
-
-                if self._use_posterior_this_transition(use_posterior):
+                if use_posterior:
                     u_y = z_H + y_emb
                     mu_q = self.post_mu(u_y)
                     logvar_q = self.post_logvar(u_y) + self.post_logvar_bias
                     eps = self.reparameterize(mu_q, logvar_q)
-                    if train_diag is not None:
-                        self._record_train_diag(t, mu_q, logvar_q, mu_p, logvar_p, train_diag)
                 else:
+                    mu_p = self.prior_mu(z_H)
+                    logvar_p = self.prior_logvar(z_H) + self.prior_logvar_bias
                     eps = self.reparameterize(mu_p, logvar_p)
 
-                if diag_kl_dst is not None:
-                    self._record_diag_kl(t, z_H, diag_kl_y, mu_p, logvar_p, diag_kl_dst)
-
-                z_H = z_H + self.config.eps_scale * eps
+                z_H = z_H + eps
                 lrpm_z.append(z_H[:, 0])
 
         # 1 with grad
         for _L_step in range(self.config.L_cycles):
-            z_tilde = self.L_level(z_L, z_H + input_embeddings, **seq_info)
-            if self.config.damping_eta != 1.0:
-                z_L = self.config.damping_eta * z_tilde \
-                      + (1.0 - self.config.damping_eta) * z_L
-            else:
-                z_L = z_tilde
+            z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
 
         z_H = self.L_level(z_H, z_L, **seq_info)
 
         mu_p = self.prior_mu(z_H)
         logvar_p = self.prior_logvar(z_H) + self.prior_logvar_bias
 
-        # prior 로 뽑히면 q=p 라 KL 이 0 이므로 항 자체를 뺀다 (kl=None).
-        use_post_last = self._use_posterior_this_transition(use_posterior)
-        if use_post_last:
+        if use_posterior:
             u_y = z_H + y_emb
             mu_q = self.post_mu(u_y)
             logvar_q = self.post_logvar(u_y) + self.post_logvar_bias
             eps = self.reparameterize(mu_q, logvar_q)
             kl = self.kl_loss(mu_q, logvar_q, mu_p, logvar_p)
-            if train_diag is not None:
-                self._record_train_diag(self.config.H_cycles, mu_q, logvar_q,
-                                        mu_p, logvar_p, train_diag, kl=kl)
         else:
             eps = self.reparameterize(mu_p, logvar_p)
             kl = None
 
-        # Logging-only; posterior path (= training) only, so eval stays untouched.
-        diag = self._latent_diag(z_H, z_L, mu_q, logvar_q) if use_post_last else None
-
-        if train_diag:
-            diag = {**diag, **train_diag} if diag is not None else dict(train_diag)
-
-        if diag_kl_dst is not None:
-            self._record_diag_kl(self.config.H_cycles, z_H, diag_kl_y, mu_p, logvar_p, diag_kl_dst)
-            self._diag_kl_accumulate(diag_kl_dst)
-            diag = {**diag, **diag_kl_dst} if diag is not None else diag_kl_dst
-
-        z_H = z_H + self.config.eps_scale * eps
+        z_H = z_H + eps
         lrpm_z.append(z_H[:, 0])
 
 
@@ -462,7 +335,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         q_logits = self.q_head(z_H[:, 0].detach()).to(torch.float32)
 
         lrpm_logits = self.lrpm_head(torch.stack(lrpm_z, dim=1)).to(torch.float32).squeeze(-1)
-        return new_carry, output, (q_logits[..., 0], q_logits[..., 1]), kl, lrpm_logits, diag
+        return new_carry, output, (q_logits[..., 0], q_logits[..., 1]), kl, lrpm_logits
 
 class TinyRecursiveReasoningModel_ACTV1(nn.Module):
     """ACT wrapper."""
@@ -498,7 +371,7 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
         new_current_data = {k: torch.where(carry.halted.view((-1, ) + (1, ) * (batch[k].ndim - 1)), batch[k], v) for k, v in carry.current_data.items()}
 
         # Forward inner model
-        new_inner_carry, logits, (q_halt_logits, q_continue_logits), kl, lrpm_logits, diag = self.inner(new_inner_carry, new_current_data, use_posterior=use_posterior)
+        new_inner_carry, logits, (q_halt_logits, q_continue_logits), kl, lrpm_logits = self.inner(new_inner_carry, new_current_data, use_posterior=use_posterior)
 
         outputs = {
             "logits": logits,
@@ -509,10 +382,6 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
 
         if kl is not None:
             outputs["kl"] = kl
-
-        # metrics-only side channel (dict of scalars); never a loss term
-        if diag is not None:
-            outputs["diag"] = diag
 
         with torch.no_grad():
             # Step
@@ -541,7 +410,7 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
                     # NOTE: No replay buffer and target networks for computing target Q-value.
                     # As batch_size is large, there're many parallel envs.
                     # Similar concept as PQN https://arxiv.org/abs/2407.04811
-                    _, _, (next_q_halt_logits, next_q_continue_logits), _, _, _ = self.inner(new_inner_carry, new_current_data, use_posterior=use_posterior)
+                    _, _, (next_q_halt_logits, next_q_continue_logits), _, _ = self.inner(new_inner_carry, new_current_data, use_posterior=use_posterior)
                     outputs["target_q_continue"] = torch.sigmoid(torch.where(is_last_step, next_q_halt_logits, torch.maximum(next_q_halt_logits, next_q_continue_logits)))
 
         return TinyRecursiveReasoningModel_ACTV1Carry(new_inner_carry, new_steps, halted, new_current_data), outputs

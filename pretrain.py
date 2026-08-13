@@ -84,7 +84,6 @@ class PretrainConfig(pydantic.BaseModel):
 
     nodecay_marked: bool = False
     nodecay_logvar_bias: bool = False   # prior_logvar_bias / post_logvar_bias
-    nodecay_logvar_head: bool = False   # prior_logvar / post_logvar head 하위 weight
 
 @dataclass
 class TrainState:
@@ -116,13 +115,11 @@ def create_dataloader(config: PretrainConfig, split: str, rank: int, world_size:
     return dataloader, dataset.metadata
 
 
-# endswith 가 아니라 substring 매칭이다 -- 점(.) 유무가 head/bias 를 가른다.
 _NODECAY_LOGVAR_BIAS_PATS = ("prior_logvar_bias", "post_logvar_bias")
-_NODECAY_LOGVAR_HEAD_PATS = ("prior_logvar.", "post_logvar.")
 
 
 def _adamw_param_arg(model: nn.Module, config: PretrainConfig):
-    if not (config.nodecay_marked or config.nodecay_logvar_bias or config.nodecay_logvar_head):
+    if not (config.nodecay_marked or config.nodecay_logvar_bias):
         return model.parameters()
 
     decay, nodecay, hit, marked = [], [], [], []
@@ -133,8 +130,6 @@ def _adamw_param_arg(model: nn.Module, config: PretrainConfig):
             marked.append(name)
         if config.nodecay_logvar_bias and any(p in name for p in _NODECAY_LOGVAR_BIAS_PATS):
             why.append("logvar_bias")
-        if config.nodecay_logvar_head and any(p in name for p in _NODECAY_LOGVAR_HEAD_PATS):
-            why.append("logvar_head")
         if why:
             nodecay.append(param)
             hit.append(f"{name}[{'+'.join(why)}]")
@@ -288,7 +283,6 @@ def compute_lr(base_lr: float, config: PretrainConfig, train_state: TrainState):
     )
 
 
-
 def create_evaluators(config: PretrainConfig, eval_metadata: PuzzleDatasetMetadata) -> List[Any]:
     data_paths =config.data_paths_test if len(config.data_paths_test)>0 else config.data_paths
     # Initialize evaluators
@@ -320,8 +314,6 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
 
     ((1 / global_batch_size) * loss).backward()
 
-    # grad 가 없는 파라미터를 0 으로 채워 all_reduce 대상 집합을 step 간 고정한다.
-    # 빼면 rank 마다 all_reduce 호출 횟수가 달라져 NCCL 이 교착한다.
     for param in train_state.model.parameters():
         if param.grad is None:
             param.grad = torch.zeros_like(param)
@@ -362,9 +354,6 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
             count = max(reduced_metrics["count"], 1)  # Avoid NaNs
 
             def _denom(k):
-                # diag/* 는 per-rank batch mean 이라 world_size 로만 되돌린다.
-                if k.startswith("diag/"):
-                    return world_size
                 return global_batch_size if k.endswith("loss") else count
 
             reduced_metrics = {f"train/{k}": v / _denom(k) for k, v in reduced_metrics.items()}
@@ -667,8 +656,6 @@ def launch(hydra_config: DictConfig):
                 if RANK == 0:
                     print("EVALUATE RAW (non-EMA)")
                 raw_config = config.model_copy(update={"checkpoint_path": None})
-                # raw pass 의 forward 가 RNG 를 진행시키면 학습 궤적이 ema=False run 과
-                # 갈라진다.  전후로 스냅샷·복원한다.
                 rng_cpu = torch.get_rng_state()
                 rng_cuda = torch.cuda.get_rng_state_all()
                 train_state.model.eval()

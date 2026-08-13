@@ -33,7 +33,6 @@ from pydantic import BaseModel
 from common import PuzzleDatasetMetadata
 
 
-# 1: 선 없음 / 2: 선 있음 / 3,4,5: 올바른 색상들
 NO_EDGE, EDGE = 1, 2
 COLOR0 = 3          # 3=red, 4=blue, 5=green
 
@@ -70,16 +69,11 @@ class DataProcessConfig(BaseModel):
     check_samples: int = 1000
 
 
-#  R-B-R 이거나 B-G-B 이런 조합은 모두 동일하게 생각
 def canonical_colorings(n: int) -> np.ndarray:
     """All first-appearance-normalized color assignments, ``[M, n]`` in 0..2."""
-    # 3가지 색으로 n개의 노드를 칠할 수 있는 모든 경우의 수
     C = np.indices((3,) * n).reshape(n, -1).T.astype(np.int8)
-    # 노드 순으로 지금까지 등장한 색상 번호의 최댓값을 계산해 기록해둠
     running_max = np.maximum.accumulate(C, axis=1)
-    # 첫번째 노드는 무조건 0번 색상으로 칠해진 것만 선정
     ok = C[:, 0] == 0
-    # 다음 노드에 새로운 색 쓸 때, 이전 색 번호보다 +1 번호만 허용
     for j in range(1, n):
         ok &= C[:, j] <= running_max[:, j - 1] + 1
     return np.ascontiguousarray(C[ok])
@@ -87,38 +81,32 @@ def canonical_colorings(n: int) -> np.ndarray:
 
 def edge_ok_table(Ccan: np.ndarray, iu: np.ndarray, iv: np.ndarray) -> np.ndarray:
     """``D[e, m]`` = canonical coloring m gives different colors to edge e's ends."""
-    # Ccan: 표준색칠조합; iu와 iv에 칠해진 색이 모두 다른지 채점
     return np.ascontiguousarray((Ccan[:, iu] != Ccan[:, iv]).T)
 
 
 def proper_mask(bits: np.ndarray, D: np.ndarray) -> np.ndarray:
     """Which canonical colorings are proper for the graph given by ``bits``."""
-    # 주어진 그래프 bits에서 그래프가 실제로 선이 연결된 곳(행)만 추려서 배열에 저장
     e = np.nonzero(bits)[0]
     if len(e) == 0:
         return np.ones(D.shape[1], dtype=bool)
     return D[e].all(0)
 
 
-# 그래프 중복 검사
 def graph_hash(bits: np.ndarray) -> str:
     tokens = np.where(bits, EDGE, NO_EDGE).astype(np.uint8)
     return hashlib.sha1(tokens.tobytes()).hexdigest()[:16]
 
 
-# T/F 그래프 정보 -> 1/2로 변환 (모델에 입력하려고)
 def encode_input(bits: np.ndarray) -> np.ndarray:
     return np.where(bits, EDGE, NO_EDGE).astype(np.int32)
 
 
-# 색 정보: 0/1/2 -> 3/4/5
 def encode_label(coloring: np.ndarray, seq_len: int) -> np.ndarray:
     lab = np.zeros(seq_len, dtype=np.int32)          # 0 = ignore
     lab[:len(coloring)] = coloring.astype(np.int32) + COLOR0
     return lab
 
 
-# 무작위 그래프 k개 만들기
 def sample_graphs(n: int, p: float, num_graphs: int, seed: int, D: np.ndarray,
                   P: int, batch: int = 4096, max_tries: int = 40_000_000):
     """Sample unique 3-colorable ER graphs. Returns (bits[G,P], colorings list)."""
@@ -222,11 +210,6 @@ def convert_subset(set_name: str, ids: List[int], Ccan: np.ndarray, bits: np.nda
 
             results["puzzle_indices"].append(example_id)
             results["puzzle_identifiers"].append(0)
-            # 행 하나 = group 하나.  group 을 그래프 단위로 두면 sampler
-            # (puzzle_dataset.py:25) 가 그룹당 1행만 뽑아 epoch 당 색칠 1개씩만
-            # 학습되고 (gc8 1445/6996 = 20.7%, gc10 1088/13461 = 8.1%), step 수
-            # 계산(pretrain.py:256, groups/batch)도 같이 줄어든다.  nqueens 빌더가
-            # 커밋 05ba06c 에서 같은 결함을 같은 방식으로 고쳤다
             # (build_nqueens_dataset.py:176-180).
             results["group_indices"].append(puzzle_id)
 

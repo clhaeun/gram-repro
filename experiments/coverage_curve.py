@@ -1,6 +1,4 @@
-"""논문 Figure 15: x=해 개수, y=coverage, 곡선=N∈{1,5,10,20}.  sweep_harness 와 같은
-rollout 재사용, found = 앞 N개 표본 중 서로 다른 valid∧consistent 보드 수.
-상한 min(N,total)/total 곡선 병기 (해 90개 + N=20 이면 완벽해도 22%)."""
+"""Coverage 곡선 (x=해 개수, y=coverage, 곡선=N)."""
 import argparse, csv, hashlib, json, os, sys
 
 import numpy as np
@@ -14,14 +12,6 @@ from evaluators.nqueens import queen_key                          # noqa: E402
 
 
 def coverage_by_n(cand, inputs, n, totals, n_list, want_valid1=False):
-    """cand [K, B, L] -> {N: per-puzzle found 배열} (앞 N개 표본 prefix 기준).
-
-    want_valid1=True 면 (found, valid1) 을 돌려준다.  valid1 은 첫 표본 하나가
-    제약을 만족하는지(0/1) 로, found 와 달리 consistent 를 요구하지 않는다 --
-    Fig 4(right) 의 valid_n1 컬럼 정의가 '단일 샘플이 제약 만족' 이기 때문이다.
-
-    유일화 키는 nqueens.queen_key (퀸 칸 인덱스) -- 토큰 벡터 유일화가 아니다.
-    """
     K, B, L = cand.shape
     r = verify_boards(cand.reshape(K * B, L), np.tile(inputs, (K, 1)), n)
     ok = (r["valid"] & r["consistent"]).reshape(K, B)
@@ -40,9 +30,6 @@ def coverage_by_n(cand, inputs, n, totals, n_list, want_valid1=False):
 
 
 def dump_perpuzzle(path, inputs, totals, found, valid1, n_list):
-    """unique 입력 단위 CSV.  nq 데이터는 (입력,해) pair 로 행이 확장돼 있으므로
-    같은 sha1[:16] 을 가진 행들을 1행으로 합친다 -- 같은 입력의 rollout 은 노이즈
-    시드만 다를 뿐 입력이 동일하므로 첫 등장 행을 대표로 쓴다."""
     ihash = [hashlib.sha1(v.astype(np.uint8).tobytes()).hexdigest()[:16] for v in inputs]
     seen, rows = set(), []
     for i, h in enumerate(ihash):
@@ -87,7 +74,7 @@ def main():
     found, valid1 = coverage_by_n(cand, inputs, args.n, totals, n_list, want_valid1=True)
     have = totals > 0
 
-    strata = {}                                            # 해 개수별 층화 (Fig 15 의 x축)
+    strata = {}
     for t in sorted(set(int(x) for x in totals[have])):
         m = have & (totals == t)
         strata[t] = {

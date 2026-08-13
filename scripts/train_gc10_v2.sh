@@ -1,24 +1,14 @@
 #!/bin/bash
-# GRAM Graph-Coloring 10-vertex 런처.
-# scripts/archive/train_gc8_v2.sh 의 사본 -- 원본은 건드리지 않는다.
 #
-# gc8 과 다른 점은 셋뿐이다:
 #   1. data_paths = data/graph-coloring-10
-#   2. kl_coef = 0.45 (논문 B.2 GC 10-vertex. 0.5 가 아니다 -- 0.5 는 8-vertex)
-#   3. 총 step = 5000 * 13461 / 768 = 87,637
 #
-# arch 는 gram_gc8 을 그대로 쓴다. seq_len / vocab_size 는 yaml 에 없고
-# pretrain.py:create_model() 이 데이터 metadata 에서 주입하므로 (gram_gc8.yaml:32-34)
-# GC-10 의 seq_len=45 / vocab_size=6 이 자동으로 들어간다.
 #
-# kl_coef 는 sum 눈금이다. 환산하지 마라 -- 논문의 N-Queens 값 0.07(8x8) /
-#   0.045(10x10) 이 우리 run 과 정확히 일치하므로 우리 눈금 = 논문 눈금이다.
 #
 #   GPUS=4,5,6,7 bash scripts/train_gc10_v2.sh
 #   DRYRUN=1 bash scripts/train_gc10_v2.sh      # 조립만 출력, GPU 안 씀
 set -euo pipefail
 
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # scripts/ -> repo 루트
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 source ~/venv-gram/bin/activate 2>/dev/null || true
 
@@ -34,7 +24,7 @@ NPROC="${NPROC:-$(echo $GPUS | tr ',' '\n' | wc -l)}"
 PORT="${PORT:-29813}"
 
 DATA="${DATA:-data/graph-coloring-10}"
-BETA="${BETA:-0.45}"          # arch.kl_coef -- 논문 B.2 GC 10-vertex (sum 눈금)
+BETA="${BETA:-0.45}"
 EPOCHS="${EPOCHS:-5000}"
 EVALINT="${EVALINT:-250}"
 SEED="${SEED:-0}"

@@ -47,6 +47,4 @@ nodecay_marked: False
 
 # 노이즈 head 의 weight_decay 예외 (nodecay_marked 와 독립). 기본 False = 비트 동일.
 #   nodecay_logvar_bias -> prior_logvar_bias / post_logvar_bias
-#   nodecay_logvar_head -> prior_logvar. / post_logvar. 하위 weight (substring 매칭)
 nodecay_logvar_bias: False
-nodecay_logvar_head: False

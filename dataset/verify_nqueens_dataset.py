@@ -137,20 +137,17 @@ def main():
         chk(m["num_puzzle_identifiers"] == 1 and m["mean_puzzle_examples"] == 1,
             f"[4] {sp}: num_puzzle_identifiers=1, mean_puzzle_examples=1")
 
-    # --- one group == one row (사수님 "107494 groups, 107494 puzzles" 규율) ----
     for sp in ("train", "test"):
         gi, x = D[sp]["group_indices"], D[sp]["inputs"]
         chk(np.array_equal(gi, np.arange(len(x) + 1)), f"[5] {sp}: group_indices == arange(N+1) (행 1개 = group 1개)")
         D[sp]["ghash"] = [board_hash(v) for v in x]
 
-    # --- row policy: 두 split 모두 (입력, 해) 쌍 전량 -------------------------
     for sp in ("train", "test"):
         cnt = {}
         for h in D[sp]["ghash"]:
             cnt[h] = cnt.get(h, 0) + 1
         bad = [h for h, c in cnt.items() if c != len(indep[h])]
         chk(not bad, f"[6] {sp}: 입력별 행 수 == 그 입력의 전체 해 개수 (불일치 {len(bad)})")
-        # 같은 (입력, 라벨) 쌍이 두 번 나오면 안 된다
         y = D[sp]["labels"]
         pairs = {(h, y[i].tobytes()) for i, h in enumerate(D[sp]["ghash"])}
         chk(len(pairs) == len(y), f"[6] {sp}: 중복 (입력, 라벨) 행 0 ({len(y) - len(pairs)}건 중복)")
