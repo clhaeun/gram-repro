@@ -82,12 +82,7 @@ class PretrainConfig(pydantic.BaseModel):
     ema: bool = False # use Exponential-Moving-Average
     ema_rate: float = 0.999 # EMA-rate
 
-    # FPRM 모듈이 파라미터에 `_no_weight_decay` 속성으로 wd 예외를 표시한다
-    # (fp_transformer 의 input-independent α 등).  기본 False = AdamW 단일 param_group.
     nodecay_marked: bool = False
-
-    # 노이즈 head 의 weight_decay 예외.  nodecay_marked 와 독립이며 기본 False =
-    # 현행과 비트 단위 동일 (_adamw_param_arg 가 model.parameters() 를 그대로 반환).
     nodecay_logvar_bias: bool = False   # prior_logvar_bias / post_logvar_bias
     nodecay_logvar_head: bool = False   # prior_logvar / post_logvar head 하위 weight
 
@@ -121,29 +116,12 @@ def create_dataloader(config: PretrainConfig, split: str, rank: int, world_size:
     return dataloader, dataset.metadata
 
 
-# nodecay 이름 매칭 규칙.  ★ endswith 가 아니라 substring 이다 --
-# logvar head 의 실제 파라미터 이름이 `...inner.prior_logvar.gate_up_proj.weight` 라
-# endswith 로는 못 잡는다.  반대로 bias 는 `...inner.prior_logvar_bias` 로 끝나므로
-# 점(.) 유무가 head/bias 를 깨끗이 가른다 ("prior_logvar." 는 bias 를 안 잡는다).
+# endswith 가 아니라 substring 매칭이다 -- 점(.) 유무가 head/bias 를 가른다.
 _NODECAY_LOGVAR_BIAS_PATS = ("prior_logvar_bias", "post_logvar_bias")
 _NODECAY_LOGVAR_HEAD_PATS = ("prior_logvar.", "post_logvar.")
 
 
 def _adamw_param_arg(model: nn.Module, config: PretrainConfig):
-    """AdamW 에 넘길 params 인자.  세 손잡이가 전부 꺼져 있으면 `model.parameters()` 그대로.
-
-    nodecay_marked      : FPRM 이 `_no_weight_decay` 속성으로 마킹한 파라미터 (fp_transformer 의 α 등)
-    nodecay_logvar_bias : prior_logvar_bias / post_logvar_bias
-    nodecay_logvar_head : prior_logvar / post_logvar head 하위 weight
-
-    셋은 독립이며 OR 로 합쳐 하나의 weight_decay=0 group 이 된다.  lr 은 optimizer
-    step 이 param_groups 를 전수 순회하며 설정하므로 group 이 2 개여도 양쪽 다
-    갱신된다.  puzzle_emb 는 `.buffers()` 로 별도 optimizer 라 여기서 중복되지 않는다.
-
-    ★ ValueError 는 nodecay_marked 경로에만 건다 -- 그건 "켰는데 마킹이 0개면
-      조용히 현행 동작이 된다" 를 막으려는 것이고, 이름 매칭 쪽은 아래에서
-      [nodecay] 출력으로 무엇이 잡혔는지 그대로 보여준다.
-    """
     if not (config.nodecay_marked or config.nodecay_logvar_bias or config.nodecay_logvar_head):
         return model.parameters()
 
@@ -342,15 +320,8 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
 
     ((1 / global_batch_size) * loss).backward()
 
-    # ★ grad 가 없는 파라미터를 0 으로 채워 all_reduce 대상 집합을 step 간 고정한다.
-    #   arch.ss_prob>0 이면 마지막 transition 이 prior 로 뽑힌 step 에서
-    #   post_mu(2) / post_logvar(2) / post_logvar_bias 5개가 grad=None 이 된다
-    #   (실측: ss_prob=0.0 -> 0/24개, ss_prob=0.5 -> 5/24개).  이 상태로
-    #   `if param.grad is not None` 를 두면 rank 마다 all_reduce 호출 횟수가 달라져
-    #   NCCL 이 교착한다 (62번 실측: 다중 GPU 4~6 step SIGABRT).
-    #   world_size 와 무관하게 채워야 단일 GPU 와 다중 GPU 의 optimizer 동작이 같다
-    #   (AdamW 는 grad=None 인 파라미터를 통째로 건너뛰지만 0 이면 wd/모멘텀이 돈다).
-    #   ss_prob=0.0 에서는 None 이 하나도 없어 비트 동일이다.
+    # grad 가 없는 파라미터를 0 으로 채워 all_reduce 대상 집합을 step 간 고정한다.
+    # 빼면 rank 마다 all_reduce 호출 횟수가 달라져 NCCL 이 교착한다.
     for param in train_state.model.parameters():
         if param.grad is None:
             param.grad = torch.zeros_like(param)
@@ -360,7 +331,6 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
         for param in train_state.model.parameters():
             dist.all_reduce(param.grad)
 
-    # gradient clipping 1.0
     torch.nn.utils.clip_grad_norm_(train_state.model.parameters(), 1.0)
 
     # Apply optimizer
@@ -392,9 +362,7 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
             count = max(reduced_metrics["count"], 1)  # Avoid NaNs
 
             def _denom(k):
-                # diag/* arrive as per-rank batch means, so dist.reduce's sum only
-                # needs undoing by world_size.  Everything else is a sum over
-                # examples: losses normalise by batch, metrics by halted count.
+                # diag/* 는 per-rank batch mean 이라 world_size 로만 되돌린다.
                 if k.startswith("diag/"):
                     return world_size
                 return global_batch_size if k.endswith("loss") else count
@@ -405,7 +373,6 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
             return reduced_metrics
 
 def flatten_metrics(metrics: dict, prefix: str = "") -> dict:
-    """evaluate() returns {set_name: {metric: value}}; flatten to {set_name/metric: float}."""
     flat = {}
     for k, v in metrics.items():
         if isinstance(v, dict):
@@ -562,8 +529,6 @@ def save_code_and_config(config: PretrainConfig):
     # Log code
     wandb.run.log_code(config.checkpoint_path)
 
-    # Explicit per-file snapshot of the two files that define GRAM's behaviour,
-    # so a run's arch/loss source is recoverable straight from the wandb run.
     for code_file in code_list:
         if code_file is not None and os.path.exists(code_file):
             wandb.save(code_file, base_path=os.path.dirname(os.path.abspath(code_file)), policy="now")
@@ -697,18 +662,13 @@ def launch(hydra_config: DictConfig):
                 wandb.log(metrics, step=train_state.step)
                 print(f"[EVAL @ step {train_state.step}] " + " ".join(f"{k}={v:.4f}" for k, v in sorted(flatten_metrics(metrics).items())), flush=True)
 
-            ############ Raw (non-EMA) evaluation at the same step -- ema=True 면 항상.
-            # EMA 곡선만 보면 EMA 가 학습 중반에 0% 인 구간에서 run 을 오독한다.
-            # raw pass 는 side-effect free: checkpoint_path 를 비운
-            # config 사본을 받아 EMA pass 의 산출물을 덮지 못한다.
+            ############ Raw (non-EMA) evaluation at the same step
             if config.ema:
                 if RANK == 0:
                     print("EVALUATE RAW (non-EMA)")
                 raw_config = config.model_copy(update={"checkpoint_path": None})
-                # The extra forward passes would otherwise advance the torch RNG
-                # (GRAM samples noise every forward), so training after this eval
-                # would diverge from an ema=False run at the same seed.  Snapshot
-                # and restore so the raw pass cannot move the training trajectory.
+                # raw pass 의 forward 가 RNG 를 진행시키면 학습 궤적이 ema=False run 과
+                # 갈라진다.  전후로 스냅샷·복원한다.
                 rng_cpu = torch.get_rng_state()
                 rng_cuda = torch.cuda.get_rng_state_all()
                 train_state.model.eval()
@@ -734,8 +694,6 @@ def launch(hydra_config: DictConfig):
             if RANK == 0 and (config.checkpoint_every_eval or (_iter_id == total_iters - 1)):
                 save_train_state(config, train_state_eval)                       # step_N = EMA
                 if config.ema:
-                    # also persist the raw live (non-EMA) SGD weights, so EMA
-                    # effects can be separated from path effects post-hoc.
                     save_train_state(config, train_state, suffix=".live")        # step_N.live
 
             if config.ema:

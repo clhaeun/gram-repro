@@ -33,7 +33,7 @@ QUEEN = 2
 
 
 def queen_key(board: np.ndarray) -> tuple:
-    """해 유일화(dedupe)용 정규 키 = ★퀸 칸 인덱스만★.
+    """해 유일화(dedupe)용 정규 키 = 퀸 칸 인덱스만.
 
     verify_boards 는 `preds == QUEEN` 만 읽으므로 빈칸 토큰 값(1 / PAD 0 / 그 외)은
     valid·consistent 판정에 들어가지 않는다.  그런데 `tuple(board)` 로 유일화하면

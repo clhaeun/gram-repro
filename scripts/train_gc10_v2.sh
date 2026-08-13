@@ -4,14 +4,14 @@
 #
 # gc8 과 다른 점은 셋뿐이다:
 #   1. data_paths = data/graph-coloring-10
-#   2. ★ kl_coef = 0.45 ★ (논문 B.2 GC 10-vertex. 0.5 가 아니다 -- 0.5 는 8-vertex)
+#   2. kl_coef = 0.45 (논문 B.2 GC 10-vertex. 0.5 가 아니다 -- 0.5 는 8-vertex)
 #   3. 총 step = 5000 * 13461 / 768 = 87,637
 #
 # arch 는 gram_gc8 을 그대로 쓴다. seq_len / vocab_size 는 yaml 에 없고
 # pretrain.py:create_model() 이 데이터 metadata 에서 주입하므로 (gram_gc8.yaml:32-34)
 # GC-10 의 seq_len=45 / vocab_size=6 이 자동으로 들어간다.
 #
-# ★ kl_coef 는 sum 눈금이다. 환산하지 마라 -- 논문의 N-Queens 값 0.07(8x8) /
+# kl_coef 는 sum 눈금이다. 환산하지 마라 -- 논문의 N-Queens 값 0.07(8x8) /
 #   0.045(10x10) 이 우리 run 과 정확히 일치하므로 우리 눈금 = 논문 눈금이다.
 #
 #   GPUS=4,5,6,7 bash scripts/train_gc10_v2.sh

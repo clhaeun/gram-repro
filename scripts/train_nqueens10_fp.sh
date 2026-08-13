@@ -13,12 +13,12 @@
 # steps/epoch = total_puzzles(107,480)/768 = 139.95.
 # EPOCHS=990, EVALINT=30 -> eval 33회, eval 간격 floor(30*139.95)=4198 step.
 # 첫 eval 은 step 4198, n_eval=19220 (신 데이터 test 축).
-# ★ pretrain.py 의 assert epochs % eval_interval == 0 -- 990 % 30 = 0 OK.
+# pretrain.py 의 assert epochs % eval_interval == 0 -- 990 % 30 = 0 OK.
 #
 #   RUN=nq10_fp_a3p_s0 SEED=0 EPOCHS=990 EVALINT=30 GPUS=2,3,4 PORT=29971 bash scripts/train_nqueens10_fp.sh
 #   RUN=nq10_fp_a3p_s1 SEED=1 EPOCHS=990 EVALINT=30 GPUS=5,6,7 PORT=29972 bash scripts/train_nqueens10_fp.sh
 #
-# ★ lr/wd 를 1e-3 으로 바꾸지 마라. 8x8 에서 A1(기존 블록+1e-3/1e-3)이 accuracy
+# lr/wd 를 1e-3 으로 바꾸지 마라. 8x8 에서 A1(기존 블록+1e-3/1e-3)이 accuracy
 #   0.0087 로 죽었고 A2(fp+1e-3/1e-3)는 NaN 이었다. GRAM 은 TRM/FPRM 에 없는 KL 항이
 #   sum 눈금(초기 kl_loss ~17,000)이라 lr 10배면 KL gradient 가 폭주한다.
 #   FPRM 도 Maze(Table 5)에서는 lr 1e-4 / wd 1.0 을 쓴다 -- wd 인하는 pre-norm 의

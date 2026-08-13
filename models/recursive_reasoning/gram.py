@@ -51,20 +51,18 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     rope_theta: float = 10000.
     
 
-    # --- FPRM 기여1: pre-norm + residual scaling (fp_transformer) ----------
-    # False = 기존 ReasoningModule 경로 그대로. 기존 yaml/checkpoint 무영향.
     use_fp_transformer: bool = False
     norm_type: str = "pre-norm"               # 'pre-norm'|'post-norm'|'peri-norm'
     residual_scale: Optional[str] = "fixed"   # None|'fixed'|'input-independent'|'input-dependent'
-    alpha_1_init: float = 0.75                # FPRM Table 4 (Sudoku)
-    alpha_2_init: float = 0.25                # FPRM Table 4 (Sudoku)
-    outer_only: bool = False                  # True = Eq3 만 (α1=β1=1)
-    norm_placement: str = "none"              # 'input'|'output'|'none' / FPRM default 미확인
-    normalize_input_injection: bool = False   # FPRM default 미확인
-    conv_type: str = "none"                   # 기여1만 이식 → conv off
-    conv_kernel_size: int = 3                 # off 여도 __init__ 이 읽음
+    alpha_1_init: float = 0.75
+    alpha_2_init: float = 0.25
+    outer_only: bool = False
+    norm_placement: str = "none"              # 'input'|'output'|'none'
+    normalize_input_injection: bool = False
+    conv_type: str = "none"
+    conv_kernel_size: int = 3
     conv_bias: bool = False
-    causal: bool = False                      # pretrain.py 가 이미 주입 중, 필드 선언만 필요
+    causal: bool = False
     softmax_temp: float = 1.0
     use_spec_norm_linear: bool = False
     weight_dropout: float = 0.0
@@ -84,35 +82,16 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     kl_balance: float = 0.8
     lprm_coef: float = 1.0
 
-    # ε 주입 계수. FPRM Theorem 1 의 유계성은 "모든 덧셈에 계수" 를 전제하는데
-    # GRAM 의 z_H = z_H + eps 만 계수가 없어 그 자리에서 보장이 깨진다.
-    # 1.0 = 현행과 비트 단위 동일.
     eps_scale: float = 1.0
-
-    # inner z_L loop damped update. 1.0 = 현행과 비트 단위 동일.
-    # η 고정. patience/adaptive 는 넣지 않는다 -- L_cycles(4) < FPRM patience(10) 이라
-    # 발동 기회 자체가 없다.
     damping_eta: float = 1.0
 
     noise_head_expansion: float = 4.0
 
-    # 평가 시 posterior 를 ★측정 전용★ 으로 계산해 transition 별 KL 을 기록한다.
-    # GRAM Eq 14 는 KL 을 마지막 transition 에만 걸므로(논문이 biased surrogate 로
-    # 명시) 앞쪽 transition 의 prior 가 미학습 상태로 남는지 실측하기 위한 것이다.
-    # False = 현행과 비트 단위 동일.
     diag_kl_per_transition: bool = False
 
-    # 학습 중 각 transition 에서 확률 ss_prob 로 posterior 대신 prior 를 쓴다.
-    # 학습은 posterior(정답 봄) / 추론은 prior(정답 없음) 라는 exposure bias 완화용.
-    # 0.0 = 현행과 비트 단위 동일 (torch.rand 호출 자체를 건너뛴다).
     ss_prob: float = 0.0
-    # SS 분기 전용 RNG 시드.  ★ rank 에 의존하면 안 된다 (아래 _ss_gen 주석 참조).
-    # 런처가 arch.ss_seed=${SEED} 로 넘겨 seed 별로 SS 패턴이 달라지게 한다.
-    ss_seed: int = 0
+    ss_seed: int = 0  # rank 에 의존하면 안 된다 -- _ss_gen 주석 참조
 
-    # prior/post logvar head 에 더하는 학습가능 스칼라 bias 의 ★초기값★.
-    # logvar 이므로 sigma_init = exp(logvar_bias_init / 2) -- 0.0 이면 sigma 1.0,
-    # -4.0 이면 sigma 0.135 다.  0.0 = 현행과 비트 단위 동일.
     logvar_bias_init: float = 0.0
 
 
@@ -168,7 +147,6 @@ class TinyRecursiveReasoningModel_ACTV1ReasoningModule(nn.Module):
         return hidden_states
 
 
-# transition loop
 class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
     def __init__(self, config: TinyRecursiveReasoningModel_ACTV1Config) -> None:
         super().__init__()
@@ -201,8 +179,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             pass
 
         # Reasoning Layers
-        # FPRM 기여1: use_fp_transformer=True 면 pre-norm + residual scaling 블록으로 교체.
-        # import 는 분기 안에 둔다 -- False 인 기존 run 이 fp_* 파일 상태와 무관하게 돌아야 한다.
         if self.config.use_fp_transformer:
             from models.fp_transformer import FixedPointTransformer
             self.L_level = FixedPointTransformer(self.config, self.config.L_layers)
@@ -228,31 +204,17 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         self.post_logvar = SwiGLU(hidden_size=D, expansion=nh_exp)
         self.lrpm_head = CastedLinear(D, 1, bias=True)
 
-        # prior/posterior logvar 헤드에 더하는 학습가능 스칼라 bias.  초기값은
-        # config.logvar_bias_init (기본 0.0 = sigma 1.0 시작) 이다.  파라미터 자체는
-        # state_dict 키이자 GRAM 노이즈 head 의 일부다.
         _lv_init = float(self.config.logvar_bias_init)
         self.prior_logvar_bias = nn.Parameter(torch.tensor(_lv_init))
         self.post_logvar_bias = nn.Parameter(torch.tensor(_lv_init))
 
-        # Test-time sampled latent std 조정 (논문 Table 3 ablation; harness 의
-        # sigma_scale()/mu_scale() 컨텍스트가 이 속성을 바꾼다)
         self.sigma_scale = 1.0
 
-        # diag_kl_per_transition 누적기 (측정 전용).  forward 궤적과 무관하며
-        # 플래그가 꺼져 있으면 건드리지 않는다.  harness 가 reset -> rollout ->
-        # result 순으로 쓴다.
         self.diag_kl_sum: Dict[str, float] = {}
         self.diag_kl_n: int = 0
 
-        # [B] scheduled sampling 전용 RNG.
-        # ★★ rank 무관한 시드를 쓴다.  pretrain.py:607 이
-        #    torch.random.manual_seed(config.seed + RANK) 로 rank 마다 전역 시드를
-        #    다르게 주므로, 전역 RNG 로 분기를 뽑으면 rank 별로 posterior/prior 가
-        #    갈린다.  그러면 마지막 transition 이 prior 인 rank 에서만
-        #    post_mu/post_logvar 의 grad 가 없어 pretrain.py 의 수동 all_reduce
-        #    호출 집합이 어긋나고 NCCL 이 교착한다 (62번 실측: 4~6 step SIGABRT).
-        # ★ CPU generator 라 CUDA 스트림의 randn_like 소비에 끼어들지 않는다.
+        # rank 무관한 시드를 쓴다.  전역 RNG 는 rank 마다 시드가 달라(pretrain.py)
+        # 분기가 갈리고, all_reduce 호출 집합이 어긋나 NCCL 이 교착한다.
         self._ss_gen = torch.Generator()
         self._ss_gen.manual_seed(self.config.ss_seed * 1000003 + 777)
 
@@ -281,10 +243,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
 
     def _y_embeddings(self, labels):
-        # 사수 처방 4 (posterior 의 y-copy 통로 차단): y 는 학습된 embedding 조회가 아니라
-        # one-hot 을 zeropad 로 hidden_size 에 얹는다.  파라미터 0개, state_dict 무영향.
-        # 0.573 = 학습된 embed_tokens 노름(12.97) / ‖z_H‖(22.63) 실측 비율.
-        # one-hot 은 노름이 고정이라 학습으로 못 줄이므로 처음부터 맞춘 값.
+        # 0.573 = embed_tokens 노름(12.97) / ‖z_H‖(22.63) 실측 비율.
         labels = torch.where(labels==IGNORE_LABEL_ID, 0, labels)
         oh = F.one_hot(labels.to(torch.int64), num_classes=self.config.vocab_size)
         embedding = F.pad(oh.to(self.forward_dtype),
@@ -307,16 +266,8 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
 
     def _use_posterior_this_transition(self, use_posterior: bool) -> bool:
-        """[B] scheduled sampling: transition 마다 ★독립★ 으로 prior/posterior 를 뽑는다
-        (sequence 당 1회가 아니다).
-
-        ★ ss_prob=0.0 에서는 torch.rand 를 아예 부르지 않는다 -- 부르면 RNG 소비가
-          달라져 기존 run 과의 비트 동일성이 깨진다.  분기로 처리해야 한다.
-        ★ 전역 RNG 가 아니라 _ss_gen 을 쓴다.  전역은 rank 마다 시드가 달라
-          (pretrain.py:607) 분기가 갈리고 all_reduce 가 교착한다.  train step 당
-          inner forward 호출 수가 rank 간 동일하므로 이 generator 는 lockstep 을
-          유지한다.
-        """
+        # ss_prob=0.0 에서는 torch.rand 를 부르지 않는다 -- 부르면 RNG 소비가 달라져
+        # 기존 run 과 비트 동일성이 깨진다.
         if not use_posterior:
             return False
         if self.config.ss_prob <= 0.0:
@@ -332,13 +283,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
     @torch.no_grad()
     def _latent_diag(self, z_H, z_L, mu, logvar):
-        """FPRM Figure 2b 재현용: 최종 transition 의 ‖z_H‖/‖z_L‖ (배치·시퀀스 평균).
-        boundedness 가 FPRM 1차 판정 지표 -- accuracy 보다 먼저 본다.
-
-        eps_mu/eps_std 는 eps = mu + std*noise 의 두 항을 분리 기록한다.
-        29번 실측에서 σ 는 붕괴 구간 0.09% 변동뿐이었으므로, 폭주 주범이
-        mu 인지 z_H 자체인지 갈라야 eps_scale 셀 결과를 해석할 수 있다.
-        """
         return {
             "diag/z_h_norm": z_H.detach().float().norm(dim=-1).mean(),
             "diag/z_l_norm": z_L.detach().float().norm(dim=-1).mean(),
@@ -349,17 +293,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
     @torch.no_grad()
     def _record_train_diag(self, t: int, mu_q, logvar_q, mu_p, logvar_p, dst: dict, kl=None):
-        """[1] ★학습 중★ transition 별 σ/μ/KL 관측.  플래그 없이 posterior 분기에서
-        항상 돈다 -- σ 처방 arm 의 판정 지표가 σ 인데 학습 중 σ 를 못 보면 실험이
-        성립하지 않는다.
-
-        _record_diag_kl(--diag-kl, harness 전용) 과 달리 posterior 를 새로 계산하지
-        않는다.  이미 궤적이 쓰고 있는 mu_q/logvar_q 를 그대로 읽을 뿐이라
-        추가 head forward 가 없다.  no_grad + RNG 미소비 -> 궤적 불변.
-
-        마지막 transition 은 호출부가 이미 만든 kl 을 넘겨 재계산을 피한다.
-        축은 harness 쪽 diag/kl_t{t} 와 같다 (D축 합 -> L축 합 -> batch 평균).
-        """
         std_q = torch.exp(0.5 * logvar_q.detach().float())
         if kl is None:
             kl = self.kl_loss(mu_q, logvar_q, mu_p, logvar_p)
@@ -370,13 +303,11 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
 
     def diag_kl_reset(self):
-        """diag_kl_per_transition 누적기 초기화 (harness 가 rollout 전에 부른다)."""
         self.diag_kl_sum = {}
         self.diag_kl_n = 0
 
 
     def diag_kl_result(self):
-        """누적된 transition 별 KL/μ/σ 의 forward 평균.  누적이 없으면 None."""
         if self.diag_kl_n == 0:
             return None
         return {k: v / self.diag_kl_n for k, v in sorted(self.diag_kl_sum.items())}
@@ -391,32 +322,19 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
     @torch.no_grad()
     def _record_diag_kl(self, t: int, z_H, y_emb, mu_p, logvar_p, dst: dict):
-        """transition t 의 posterior 를 ★측정 전용★ 으로 계산해 KL/μ/σ 를 적는다.
-
-        ★★ 여기서 만든 mu_q 로 ε 을 뽑거나 z_H 를 갱신하면 절대 안 된다.  궤적이
-           바뀌면 다른 것을 재게 된다.  post_mu/post_logvar/_y_embeddings 는 전부
-           RNG 를 소비하지 않으므로 이 블록은 prior 경로의 난수 스트림도 건드리지
-           않는다 (그래서 플래그 on/off 가 비트 단위로 같다).
-
-        kl_t 는 losses.py 의 kl_loss 와 같은 눈금이다: D축 합 -> L축 합.  다만
-        batch 는 합이 아니라 평균이다 -- diag/ 접두사는 pretrain.py 가 world_size
-        로만 나누는 per-rank batch mean 규약이기 때문이다.
-        """
+        # 측정 전용.  여기서 만든 mu_q 로 eps 를 뽑거나 z_H 를 갱신하면 궤적이 바뀐다.
         u_y = z_H + y_emb
         mu_q = self.post_mu(u_y)
         logvar_q = self.post_logvar(u_y) + self.post_logvar_bias
         kl = self.kl_loss(mu_q, logvar_q, mu_p, logvar_p)
         std_q = torch.exp(0.5 * logvar_q.float())
         dst[f"diag/kl_t{t}"] = kl.sum(-1).sum(-1).mean()
-        # 두 축을 병기한다.  *_norm 은 per-position L2(D축) 뒤 나머지 축 평균,
-        # *_absmean/*_mean 은 (B,L,D) 전체 element 평균이다.  두 축은 sqrt(D) 만큼
-        # 눈금이 다르므로 인용 시 어느 축인지 밝힐 것.
+        # *_norm 은 per-position L2(D축) 뒤 나머지 축 평균, *_absmean/*_mean 은
+        # (B,L,D) 전체 element 평균 -- 두 축은 sqrt(D) 만큼 눈금이 다르다.
         dst[f"diag/eps_mu_norm_t{t}"] = mu_q.float().norm(dim=-1).mean()
         dst[f"diag/eps_std_norm_t{t}"] = std_q.norm(dim=-1).mean()
         dst[f"diag/eps_mu_absmean_t{t}"] = mu_q.float().abs().mean()
         dst[f"diag/eps_std_mean_t{t}"] = std_q.mean()
-        # 차원(D) 간 표준편차.  역산이 아니라 직접 계산한다 -- sigma 가 D 축에서
-        # 균일한지(head 가 죽어 상수를 뱉는지) 를 mean 과 분리해 보기 위한 축.
         dst[f"diag/eps_std_dimstd_t{t}"] = std_q.std(dim=-1).mean()
 
 
@@ -440,9 +358,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
         y_emb = self._y_embeddings(batch["labels"]) if use_posterior else None
 
-        # 진단 B+ (측정 전용).  평가 시엔 use_posterior=False 라 y_emb 가 None 이므로
-        # 여기서 label 을 따로 읽는다.  ★ 궤적에는 절대 쓰지 않는다.
-        # [1] 학습 중 σ 관측 (기본 on).  posterior 분기에서만 채워진다.
         train_diag = {} if use_posterior else None
 
         diag_kl_dst = None
@@ -466,7 +381,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         # H_cycles-1 without grad
         with torch.no_grad():
             for _H_step in range(self.config.H_cycles-1):
-                t = _H_step + 1                     # 1-based transition 번호
+                t = _H_step + 1
                 for _L_step in range(self.config.L_cycles):
                     z_tilde = self.L_level(z_L, z_H + input_embeddings, **seq_info)
                     if self.config.damping_eta != 1.0:
@@ -481,8 +396,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                 logvar_p = self.prior_logvar(z_H) + self.prior_logvar_bias
 
                 if self._use_posterior_this_transition(use_posterior):
-                    # KL 페널티는 마지막(grad) transition 에만 걸린다 (Eq 14) --
-                    # 여기 no-grad transition 들은 샘플만 뽑는다.
                     u_y = z_H + y_emb
                     mu_q = self.post_mu(u_y)
                     logvar_q = self.post_logvar(u_y) + self.post_logvar_bias
@@ -492,8 +405,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                 else:
                     eps = self.reparameterize(mu_p, logvar_p)
 
-                # ★ eps 를 뽑은 뒤에 잰다 -- 난수 스트림에 끼어들지 않음을 눈으로
-                #   확인할 수 있게. (_record_diag_kl 자체는 RNG 를 안 쓴다)
                 if diag_kl_dst is not None:
                     self._record_diag_kl(t, z_H, diag_kl_y, mu_p, logvar_p, diag_kl_dst)
 
@@ -514,8 +425,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         mu_p = self.prior_mu(z_H)
         logvar_p = self.prior_logvar(z_H) + self.prior_logvar_bias
 
-        # ★ [B] 마지막 transition 도 scheduled sampling 대상이다.  prior 로 뽑히면
-        #   q=p 라 KL 이 0 이므로 항 자체를 뺀다 (kl=None -> losses.py 가 0 처리).
+        # prior 로 뽑히면 q=p 라 KL 이 0 이므로 항 자체를 뺀다 (kl=None).
         use_post_last = self._use_posterior_this_transition(use_posterior)
         if use_post_last:
             u_y = z_H + y_emb
@@ -531,17 +441,11 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             kl = None
 
         # Logging-only; posterior path (= training) only, so eval stays untouched.
-        # ss_prob=0.0 이면 use_post_last == use_posterior 라 기존과 동일하다.
         diag = self._latent_diag(z_H, z_L, mu_q, logvar_q) if use_post_last else None
 
-        # [1] transition 별 학습 diag 를 같은 채널에 얹는다 (losses.py:113-114 ->
-        #     pretrain.py:355-358 의 diag/ 규약).  ss_prob>0 로 prior 가 뽑힌
-        #     transition 은 mu_q 가 없어 그 t 의 키가 빠진다.
         if train_diag:
             diag = {**diag, **train_diag} if diag is not None else dict(train_diag)
 
-        # 마지막(grad) transition 도 같이 잰다 -- 이 자리만 KL 을 학습받으므로
-        # 앞쪽 t 의 미학습 여부를 판정하려면 기준점이 필요하다.
         if diag_kl_dst is not None:
             self._record_diag_kl(self.config.H_cycles, z_H, diag_kl_y, mu_p, logvar_p, diag_kl_dst)
             self._diag_kl_accumulate(diag_kl_dst)

@@ -1,18 +1,12 @@
 """Sudoku Figure 3 대조 셀 harness (--data / --limit / GPU 샤딩).
 
-★ 왜 새 파일인가: experiments/legacy/eval_harness.py 는 채점 대상 경로를
-  all_config.yaml 의 data_paths 에서만 읽고(--data 없음), 표본을
-  np.random.default_rng(seed).choice 로 뽑는다(연속 블록 아님).  34번은
-  --data 원본 + --limit 연속 슬라이싱으로 측정했으므로 그 규약을 그대로 쓴다.
-  기존 파일은 contract 검증 라이브러리로 현역이라 건드리지 않고 import 만 한다.
+채점 로직·RNG 스트림은 재구현하지 않고 legacy 의 _make_batch / _forward_once /
+SudokuTask / compute_metrics 를 import 해 쓴다.  표본은 --data + --limit 연속
+슬라이싱으로 뽑는다 (legacy 쪽 rng.choice 규약이 아니다).
 
-★ 채점 로직·RNG 스트림은 재구현하지 않는다.  legacy 의
-  _make_batch / _forward_once / SudokuTask / compute_metrics 를 그대로 쓴다.
-
-★ 샤딩 주의: RNG 는 candidate k 마다 seed*100003+k 로 재시드되고 배치 순서대로
-  randn 을 소비한다.  따라서 행->노이즈 대응은 샤드 경계와 batch_size 에 의존한다.
-  샤딩 레이아웃이 다르면 같은 행이 다른 노이즈를 받는다 -- 평균은 표본오차 안에서
-  일치하지만 비트 동일하지는 않다.
+샤딩 주의: RNG 는 candidate k 마다 seed*100003+k 로 재시드되고 배치 순서대로 randn 을
+소비하므로 행->노이즈 대응이 샤드 경계와 batch_size 에 의존한다.  레이아웃이 다르면
+평균은 표본오차 안에서 일치하지만 비트 동일하지는 않다.
 
 사용:
   # 샤드 (GPU 마다 1개)

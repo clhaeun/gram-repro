@@ -1,7 +1,7 @@
 #!/bin/bash
 # [50] ⑥ depth utilization -- FPRM 4.4.2 (post-norm 이 pre-norm 보다 일찍 포화) 를 GRAM 에 이식.
 #
-# 62번 격자(hms 8~64)와 표본·조건을 그대로 맞추고 ★128, 320 만★ 추가한다.
+# 62번 격자(hms 8~64)와 표본·조건을 그대로 맞추고 128, 320 만추가한다.
 #   ckpt   sudoku_paper_34 / step_65100 (EMA; step_65100.live 가 live)
 #          ※ 로컬 hms16 기준선은 sudoku_paper_34_eval50 로 돌았지만 step 파일은
 #            md5 b050e90165c998abf79f55b3e27193c6 로 바이트 동일하다.

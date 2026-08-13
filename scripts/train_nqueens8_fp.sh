@@ -52,7 +52,7 @@ PORT="${PORT:-29671}"
 # y_inject add / dual eval(ema 시) / nodecay name 분기는 코드에 하드코딩돼 손잡이가 사라졌다.
 # 구 기본값(KL_RED=sum, YONEHOT=True zeropad 0.573, LOGVARBIAS=0.0, YINJECT=add,
 # DUALEVAL=True, NODECAY_*=False)과 전부 동일하므로 launch 결과는 그대로다.
-# ★ 위에 나열된 KL_RED / YONEHOT / LOGVARBIAS / YINJECT / DUALEVAL / NODECAY_Y_PROJ /
+# 위에 나열된 KL_RED / YONEHOT / LOGVARBIAS / YINJECT / DUALEVAL / NODECAY_Y_PROJ /
 #   NODECAY_LOGVAR_BIAS 는 전부 코드에서 제거됨 -- 하드코딩이다.  환경변수로 줘도 무시된다.
 #     kl_reduction -> losses.py:90-95    sum 고정 (mean 은 run 을 붕괴시켜 분기 삭제)
 #     y one-hot    -> gram.py:235-246    embed_scale * 0.573 * one_hot zeropad

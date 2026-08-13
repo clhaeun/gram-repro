@@ -20,7 +20,7 @@ def coverage_by_n(cand, inputs, n, totals, n_list, want_valid1=False):
     제약을 만족하는지(0/1) 로, found 와 달리 consistent 를 요구하지 않는다 --
     Fig 4(right) 의 valid_n1 컬럼 정의가 '단일 샘플이 제약 만족' 이기 때문이다.
 
-    ★ 유일화 키는 nqueens.queen_key (퀸 칸 인덱스).  토큰 벡터 유일화가 아니다.
+    유일화 키는 nqueens.queen_key (퀸 칸 인덱스) -- 토큰 벡터 유일화가 아니다.
     """
     K, B, L = cand.shape
     r = verify_boards(cand.reshape(K * B, L), np.tile(inputs, (K, 1)), n)
@@ -42,7 +42,7 @@ def coverage_by_n(cand, inputs, n, totals, n_list, want_valid1=False):
 def dump_perpuzzle(path, inputs, totals, found, valid1, n_list):
     """unique 입력 단위 CSV.  nq 데이터는 (입력,해) pair 로 행이 확장돼 있으므로
     같은 sha1[:16] 을 가진 행들을 1행으로 합친다 -- 같은 입력의 rollout 은 노이즈
-    시드만 다를 뿐 입력이 동일하므로 ★첫 등장 행★ 을 대표로 쓴다."""
+    시드만 다를 뿐 입력이 동일하므로 첫 등장 행을 대표로 쓴다."""
     ihash = [hashlib.sha1(v.astype(np.uint8).tobytes()).hexdigest()[:16] for v in inputs]
     seen, rows = set(), []
     for i, h in enumerate(ihash):

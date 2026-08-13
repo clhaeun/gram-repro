@@ -1,26 +1,12 @@
-"""Shared plumbing for the current N-Queens / GC harnesses.
+"""N-Queens / GC harness 공용 부분.
 
-GRAM's latent transition is stochastic, so K independent forward passes on the
-*same* input already give K distinct answers -- unlike TRM, which is deterministic
-and needs test-time augmentation for sample diversity.  Every rollout here is
-therefore plain repetition: no symmetry transform, no inverse mapping.
+GRAM 의 latent transition 은 확률적이라 같은 입력에 K 번 forward 하면 그것만으로
+서로 다른 K 개의 답이 나온다.  따라서 rollout 은 단순 반복이며 TRM 과 달리
+test-time augmentation(대칭 변환·역매핑)을 쓰지 않는다.
 
-Provides:
-  load_model()      checkpoint -> eager ACTLossHead (all_config.yaml + ema=False)
-  rollout()         K forward passes -> preds / v_logits / token accuracy
-  sigma_scale(), mu_scale()   rollout 이 쓰는 추론시 스케일링 컨텍스트
-
-소비자는 세 곳뿐이고 전부 load_model + rollout 만 쓴다:
-  experiments/sweep_harness.py  experiments/gc_harness.py  experiments/coverage_curve.py
-
-★ 2026-08-05 축소.  참조 0 으로 확인된 17종을 제거했다:
-    dist_setup dist_gather dist_teardown shard sharded_rollout load_puzzles
-    capture_kl capture_sigma pass_at_j majority_vote metrics auroc
-    print_hits_histogram save_json add_common_args out_dir_for SEQ_LEN
-  전부 experiments/legacy/gram_harness_legacy.py 에 그대로 남아 있고,
-  e1~e4 · sigma_probe · eval_harness 는 그쪽을 import 한다.
-  capture_* 프로브의 유래(diag_sigma.py pattern)와 kl_loss 호출 횟수 주석도
-  사본 쪽에 있다.  선례는 exp/diag_sigma.py.
+  load_model()                checkpoint -> eager ACTLossHead
+  rollout()                   K 회 forward -> preds / v_logits / token accuracy
+  sigma_scale(), mu_scale()   rollout 의 추론시 스케일링 컨텍스트
 """
 import os
 from contextlib import contextmanager
@@ -38,21 +24,17 @@ PAD = 0                 # dataset.json: pad_id = ignore_label_id = 0
 # checkpoint / data loading
 # --------------------------------------------------------------------------- #
 def load_model(ckpt_dir, step):
-    """eval_checkpoint.py pattern: all_config.yaml + load_checkpoint, ema=False.
+    """all_config.yaml + load_checkpoint 로 eager ACTLossHead 를 만든다 (ema=False).
 
-    Returns the EAGER ACTLossHead (unwrapping torch.compile via ._orig_mod) so the
-    monkeypatches and the sigma_scale attribute take effect without retracing.
+    torch.compile 을 ._orig_mod 로 벗겨 반환해야 sigma_scale 속성이 retrace 없이 먹는다.
     """
     cfg = OmegaConf.load(os.path.join(ckpt_dir, "all_config.yaml"))
     cfg.load_checkpoint = os.path.join(ckpt_dir, step)
     cfg.ema = False                  # checkpoint is already the EMA copy
     cfg.eval_save_outputs = []
     cfg.evaluators = []
-    # harness 는 추론만 한다 -- optimizer param_group 은 의미가 없다.  끄지 않으면
-    # pretrain.py 의 load_checkpoint 가 `load_state_dict(..., assign=True)` 로
-    # Parameter 객체를 통째로 교체하면서 fp_transformer 가 붙인 `_no_weight_decay`
-    # 속성이 사라지고, _adamw_param_arg 가 "마킹 0개" 로 보고 ValueError 로 즉사한다.
-    # (학습은 load_checkpoint=None 이라 이 경로를 안 타서 마킹 2개가 살아 있다.)
+    # 추론 전용이라 꺼야 한다.  load_state_dict(assign=True) 가 Parameter 를 교체하면서
+    # _no_weight_decay 마킹이 사라져 _adamw_param_arg 가 ValueError 를 낸다.
     cfg.nodecay_marked = False
     config = P.PretrainConfig(**OmegaConf.to_container(cfg, resolve=True))
 
@@ -102,8 +84,7 @@ def mu_scale(net, scale):
     that returns exactly what reparameterize returned before, so the normal path
     stays bit-identical.
 
-    ★ 이것은 추론 시 스케일링이다.  논문 Table 3b 는 학습 시 ablation 이므로
-      직접 대응하지 않는다.
+    추론 시 스케일링이라 학습 시 ablation 인 Table 3b 와 직접 대응하지 않는다.
     """
     if float(scale) == 1.0:                 # no-op: do not even wrap
         yield

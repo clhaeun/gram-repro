@@ -87,9 +87,7 @@ class ACTLossHead(nn.Module):
         lm_loss = (self.loss_fn(outputs["logits"], labels, ignore_index=IGNORE_LABEL_ID, valid_mask=mask) / loss_divisor).sum()
         q_halt_loss = F.binary_cross_entropy_with_logits(outputs["q_halt_logits"], seq_is_correct.to(outputs["q_halt_logits"].dtype), reduction="sum")
         
-        # KL reduction 은 sum 고정: D축 합 -> L축 합 -> batch 합.
-        # 'mean' 은 run 을 붕괴시킨다 (sum = gram_sudoku_halt_only 71.85%,
-        #  mean = gram_sudoku_lmean_v2 1.8%).  분기 자체를 없애 재발을 막는다.
+        # KL reduction 은 sum 고정 (D축 -> L축 -> batch).  mean 은 run 을 붕괴시킨다.
         kl_loss = torch.zeros((), device=lm_loss.device)   # 추론(prior) 시 kl 없음
         if outputs.get("kl") is not None:
             kl_loss = outputs["kl"].sum(-1).sum(-1).sum()
@@ -107,9 +105,6 @@ class ACTLossHead(nn.Module):
             "lprm_loss": lprm_loss.detach(),
         })
 
-        # FPRM boundedness diagnostics from gram.py (diag/z_h_norm, diag/z_l_norm) --
-        # already-detached scalars, batch means; `diag/` namespace 는 pretrain.py 가
-        # world_size 로만 정규화한다.
         if outputs.get("diag") is not None:
             metrics.update(outputs["diag"])
 

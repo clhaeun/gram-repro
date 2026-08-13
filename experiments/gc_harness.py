@@ -34,11 +34,9 @@ def graph_hash_rows(inputs):
 def conflict_stats(preds, inputs, n):
     """② Conflict: 위반 edge 수 mean±std (논문 2.7±2.1 형식).  preds [M, B, L].
 
-    ★ colors_ok 를 conflicts 에 게이팅하지 않는다.  노드 자리에 색토큰(3..5) 이 아닌
-    게 찍히면 verify_colorings 의 same 비교가 그냥 통과해 conflicts 가 낮게 나오지만,
-    정의를 바꾸면 in-loop `gc/conflicts_mean` (graph_coloring.py:133) 과 기존 JSON 이
-    전부 어긋난다.  nqueens.py 도 count_ok/row_ok 를 원자 플래그로 두고 valid 에서만
-    합성한다.  대신 colors_ok_rate 와 legal 디코딩 조건부 평균을 병기해 착시를 막는다.
+    colors_ok 를 conflicts 에 게이팅하지 않는다 -- 정의를 바꾸면 in-loop
+    `gc/conflicts_mean` 및 기존 JSON 과 전부 어긋난다.  대신 colors_ok_rate 와
+    legal 디코딩 조건부 평균을 병기한다.
 
     conflicts_std 는 M*B 평탄화 std (구판 호환) 라 M>1 이면 샘플 간 산포가 섞인다.
     논문의 ± 는 퍼즐 간 산포이므로 conflicts_std_across_puzzles 를 따로 낸다 (M=1 이면 동일).

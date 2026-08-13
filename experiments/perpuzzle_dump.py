@@ -4,23 +4,22 @@
 found_nK 를 동시에 만들었다.  여기서는 --N 하나만 받아 그 N 으로만 rollout 하고
 행 전수를 CSV 로 덤프한다 (test 서브샘플 없음).
 
-★ 열 정의
+열 정의
   n_solutions           sidecar 의 해당 입력 GT 전체 해 개수 (라벨 개수 아님).
                         sweep_harness.solution_counts / experiments/solution_counts.py
                         와 같은 정의 -- len(sidecar["inputs"][sha1(x)[:16]]["solutions"]).
   n_valid_samples       N 표본 중 valid (제약 만족) 인 것의 개수.  consistent 불요구.
   n_valid_consistent    N 표본 중 valid ∧ consistent 인 것의 개수 (found 의 분모 축).
-                        ★ 스펙 외 추가 열.  n_valid_samples 의 정의가 valid 단독인지
-                        valid∧consistent 인지 갈리므로 둘 다 남긴다.
-  found                 N 표본이 맞힌 ★서로 다른★ valid ∧ consistent 보드 수.
+                        n_valid_samples 의 정의가 valid 단독인지 valid∧consistent
+                        인지 갈리므로 둘 다 남긴다.
+  found                 N 표본이 맞힌 서로 다른 valid ∧ consistent 보드 수.
                         유일화 키는 nqueens.queen_key (퀸 칸 인덱스) -- 빈칸 토큰 값은
                         무시한다.  sweep_harness.coverage_at_N 의 found 와 같은 정의.
   first_valid           0/1 -- 첫 표본(k=0) 하나가 valid 인가.  Fig 4 right 축.
                         coverage_curve.dump_perpuzzle 의 valid_n1 과 같은 정의.
 
-★ 행 단위.  nq 데이터는 (입력, 해) pair 로 행이 확장돼 있어 같은 ihash 가 여러 행에
-  나온다.  퍼즐 축 집계는 ihash 로 downstream 에서 하면 된다 (unique 대표행 = 각
-  ihash 첫 등장 행).
+행 단위 덤프다.  nq 데이터는 (입력, 해) pair 로 행이 확장돼 있어 같은 ihash 가 여러
+행에 나온다 -- 퍼즐 축 집계는 downstream 에서 ihash 로 한다.
 
 사용:
   python experiments/perpuzzle_dump.py --ckpt-dir <dir> --step step_N --N 5 \

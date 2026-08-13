@@ -6,18 +6,18 @@
 `exact` 와 `valid` 가 원리상 같은 값이어야 한다.  두 축을 따로 내는 이유는
 **불일치가 곧 버그 신호**이기 때문이다 — 어긋나면 인코딩이나 채점기를 의심한다.
 
-★ `consistent`(단서 보존)를 빼면 안 된다.  행/열/박스 제약만 보면 "완전히 유효한
+`consistent`(단서 보존)를 빼면 안 된다.  행/열/박스 제약만 보면 "완전히 유효한
   스도쿠지만 주어진 문제와 다른 판" 이 통과한다.  N-Queens 의 clue 보존과 같은
   자리의 검사다 (GC 는 입력이 그래프 자체라 이 개념이 없다).
 
 인코딩 (`dataset/build_sudoku_dataset.py`, dataset.json vocab_size=11):
     inputs : 81칸 row-major.  1 = blank, 2..10 = 단서 숫자 1..9
     labels : 81칸 완성 해.     2..10 = 숫자 1..9
-    0 = pad/ignore (Sudoku 데이터에는 실제로 등장하지 않는다 -- 실측 확인)
+    0 = pad/ignore (Sudoku 데이터에는 등장하지 않는다)
 
 반환 축
     valid       : 행·열·3x3 박스가 전부 1..9 순열   AND  digits_ok
-    consistent  : ★단서 칸이 전부 보존됨★ (inputs != BLANK 인 칸에서 pred == input)
+    consistent  : 단서 칸이 전부 보존됨 (inputs != BLANK 인 칸에서 pred == input)
     solved      : valid AND consistent            <- 논문의 "accuracy" 에 해당
     exact       : pred == label 전 칸 일치         <- 라벨 일치 (해 유일성 때문에 solved 와 같아야)
     digits_ok   : 81칸 전부 2..10 로 디코딩됨

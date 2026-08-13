@@ -3,7 +3,7 @@
 nq10 : data/nqueens-10/sidecar_10.json   inputs[hash] = {split, clues, solutions}
 gc8/10: data/graph-coloring-{8,10}/sidecar_gc_{8,10}.json  graphs[hash] = {split, edges, colorings}
 
-★ test split 기준으로 통일한다.  ★ nq10 은 unique 입력 단위 (행 단위 아님) --
+test split 기준으로 통일한다.  nq10 은 unique 입력 단위(행 단위 아님)이며
 sidecar 의 키가 이미 unique 입력이므로 키당 1개씩 센다.
 
 출력: {"counts": [...]} + 같은 이름의 .meta.json

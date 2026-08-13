@@ -9,13 +9,8 @@
   ③ unconditional generation validity (Figure 5, 99.05%) 는 --unconditional 로
     설계만 넣어 두었다.  §설계 확인 참조.
 
-★ coverage 는 넣지 않는다.  Sudoku-Extreme 은 퍼즐당 해가 유일하고 sidecar 도
-  없다.  N-Queens/GC 의 coverage@20 과 대응하는 축이 존재하지 않는다.
-
-★ exp/analyze_sudoku_tta.py 를 쓰지 않는다.  그쪽은 TRM 용이라 test-time
-  augmentation 으로 다양성을 만드는데, GRAM 은 latent transition 이 stochastic
-  이라 같은 입력에 K 번 forward 하면 이미 K 개의 서로 다른 답이 나온다
-  (experiments/gram_harness.py 헤더).  TTA 를 얹으면 축이 어긋난다.
+coverage 는 넣지 않는다 -- Sudoku-Extreme 은 퍼즐당 해가 유일하고 sidecar 도 없어
+N-Queens/GC 의 coverage@20 에 대응하는 축이 없다.  TTA 도 쓰지 않는다 (gram_harness 헤더).
 
 selftest 는 CPU 이고 모델이 필요 없다.  본 측정 전에 반드시 통과해야 한다.
 
@@ -113,7 +108,7 @@ def selftest(data: str) -> None:
     print(f"[selftest c] 1칸 변조  exact=0.0 valid={c['valid']:.4f} "
           f"violations_mean={cb['violations'].mean():.2f} (min {int(cb['violations'].min())})")
 
-    # (d) ★단서 1칸 변조 -> 단서 보존 실패 검출★
+    # (d) 단서 1칸 변조 -> 단서 보존 실패 검출
     #     퍼즐마다 단서 한 칸을 골라 다른 숫자로 바꾼다.
     clue_bad = labels.copy()
     for i in range(B):
@@ -128,9 +123,8 @@ def selftest(data: str) -> None:
     print(f"[selftest d] 단서1칸   consistent=0.0 clue_breaks=1 (전건) "
           f"solved=0.0 exact=0.0 violations_mean={d1b['violations'].mean():.2f}")
 
-    # (d2) ★제약은 전부 통과하지만 문제와 다른 보드★ -- consistent 가 없으면
-    #      이게 통과해 버린다는 것을 보이는 케이스.  라벨 전체에 숫자 재라벨링
-    #      (1..9 순환)을 걸면 행/열/박스 순열 제약은 그대로 살아 있고 단서만 어긋난다.
+    # (d2) 제약은 전부 통과하지만 문제와 다른 보드 -- consistent 가 없으면 통과한다.
+    #      숫자 재라벨링(1..9 순환)은 행/열/박스 제약을 보존하고 단서만 어긋나게 한다.
     relabel = labels.copy()
     relabel = 2 + (relabel - 2 + 1) % 9
     d2b = verify_boards(relabel, inputs)
@@ -142,7 +136,7 @@ def selftest(data: str) -> None:
     assert d2b["violations"].sum() == 0
     print(f"[selftest d2] 숫자재라벨 valid=1.0 violations=0 consistent=0.0 solved=0.0 "
           f"clue_breaks_mean={d2b['clue_breaks'].mean():.2f}  "
-          f"<- ★valid 만 봤으면 100% 통과했을 보드★")
+          f"<- valid 만 봤으면 100% 통과했을 보드")
 
     print(f"[selftest] PASSED  (n={B}, a 라벨=exact1 / b 무작위=exact0 위반다수 / "
           f"c 1칸변조=exact0 위반검출 / d 단서1칸=consistent0 검출 / "
@@ -162,9 +156,8 @@ def main() -> None:
     # 추론 시 스케일링.  학습 시 ablation 인 논문 Table 3b 와 직접 대응하지 않는다.
     ap.add_argument("--sigma-scale", type=float, default=1.0)
     ap.add_argument("--mu-scale", type=float, default=1.0)
-    # ★ Figure 4(left) 의 x축.  eval 에선 gram.py 의 halted = (new_steps >=
-    #   halt_max_steps) 만 남으므로 supervision step 수 = 이 값이다.
-    #   None = 체크포인트 학습값 그대로.
+    # Figure 4(left) 의 x축.  eval 에선 halted = (new_steps >= halt_max_steps) 만
+    # 남으므로 supervision step 수 = 이 값.  None = 체크포인트 학습값 그대로.
     ap.add_argument("--halt-max-steps", type=int, default=None)
     # 기본은 전수(422,786).  쓰면 결과 JSON 에 기록된다.
     ap.add_argument("--limit", type=int, default=None)

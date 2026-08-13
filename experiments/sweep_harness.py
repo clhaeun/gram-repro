@@ -1,7 +1,9 @@
 """N-Queens harness -- 논문 지표 ① Accuracy ③ Coverage@20 ④ majority@20 ⑤ verifier@20.
+
 샘플링 RNG 는 gram_harness.rollout (seed*100003+k).
-★ --sigma-scale / --mu-scale 은 추론 시 스케일링이다.  논문 Table 3b 는 학습 시
-  ablation 이므로 직접 대응하지 않는다.
+--sigma-scale / --mu-scale 은 추론 시 스케일링이라 학습 시 ablation 인 Table 3b 와
+직접 대응하지 않는다.
+
 사용: python experiments/sweep_harness.py --ckpt-dir <dir> --step step_N --out <json>
 """
 import argparse, hashlib, json, os, sys
@@ -53,8 +55,8 @@ def coverage_at_N(cand, inputs, n, totals):
     """③ Coverage@20 (Table 1): mean_x(found/total).  found = valid∧consistent unique
     (힌트 어긴 valid 보드는 해집합 밖이라 consistent 필수 -- n_found_gt_total=0 이 검산).
 
-    ★ 유일화 키는 nqueens.queen_key (퀸 칸 인덱스).  전에는 tuple(cand[k, b]) 로
-      토큰 벡터를 유일화해 빈칸 토큰 차이가 중복 계수됐다."""
+    유일화 키는 nqueens.queen_key (퀸 칸 인덱스) -- 토큰 벡터 유일화가 아니다.
+    """
     N, B, L = cand.shape
     r = verify_boards(cand.reshape(N * B, L), np.tile(inputs, (N, 1)), n)
     ok = (r["valid"] & r["consistent"]).reshape(N, B)
@@ -80,11 +82,10 @@ def coverage_at_N(cand, inputs, n, totals):
     ihash = [hashlib.sha1(v.astype(np.uint8).tobytes()).hexdigest()[:16] for v in inputs]
     res["per_row"] = {
         "ihash": ihash, "totals": totals.tolist(), "found": found.tolist()}
-    # ★ res["coverage"] 는 행 축 macro (행마다 found/total 을 평균).
-    #   micro(합계비)는 found_mean/total_mean 이다.
-    #   coverage_macro_by_input 은 퍼즐 축 macro (같은 ihash 의 found/total 을
-    #   합산 후 퍼즐마다 평균).
-    #   세 축은 눈금이 다르다 -- 인용 시 반드시 어느 축인지 밝힐 것.
+    # coverage 축 3종은 눈금이 다르다 -- 인용 시 어느 축인지 밝힐 것.
+    #   coverage                 행 축 macro
+    #   found_mean/total_mean    micro (합계비)
+    #   coverage_macro_by_input  퍼즐 축 macro
     agg = {}
     for h, t, f in zip(ihash, totals.tolist(), found.tolist()):
         if t > 0:
@@ -110,8 +111,8 @@ def main():
     # N_sup 외삽용. None = 오버라이드 없음 (체크포인트 학습값 그대로).
     # eval 에선 gram.py 의 halted = (new_steps >= halt_max_steps) 만 남으므로 N_sup = 이 값.
     ap.add_argument("--halt-max-steps", type=int, default=None)
-    # 진단 B+ (측정 전용).  transition 별 KL/μ/σ 를 <out>.diagkl.json 에 따로 쓴다.
-    # ★ --out 본 JSON 은 이 플래그 유무와 비트 단위로 같아야 한다 (궤적 불변 검증).
+    # 측정 전용.  transition 별 KL/μ/σ 를 <out>.diagkl.json 에 따로 쓴다.
+    # --out 본 JSON 은 이 플래그 유무와 무관하게 같아야 한다 (궤적 불변 검증).
     ap.add_argument("--diag-kl", action="store_true")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
@@ -153,10 +154,7 @@ def main():
           f"maj={res['majority_at_N_valid']:.4f} "
           f"vsel={res['verifier_selected_at_N_valid']:.4f} "
           f"qc={res['prior_all_samples']['queen_count_mean']:.4f}  [out] {args.out}")
-    # ★ 쓰기가 실패해도 계산 결과를 잃지 않는다.  2026-08-07 에 산출 디렉토리가
-    #   root 소유라 as-chaeun 실행이 PermissionError 로 죽으면서 nq8 σ 스윕 7셀이
-    #   통째로 날아갔다 (reports/INCIDENT_20260807_perm.md).  실패 시 stdout 으로
-    #   전량 덤프해 로그에서 복구할 수 있게 한다.
+    # 쓰기가 실패해도 stdout 으로 전량 덤프해 로그에서 복구할 수 있게 한다.
     try:
         os.makedirs(os.path.dirname(args.out), exist_ok=True)
         with open(args.out, "w") as f:
@@ -166,8 +164,7 @@ def main():
               f"!!! 아래 RESULT_JSON 한 줄이 전량 산출물이다 (복구용)", flush=True)
         print("RESULT_JSON " + json.dumps(res), flush=True)
 
-    # ★ 진단은 반드시 별도 파일.  본 JSON 에 한 글자라도 섞으면 on/off md5 대조가
-    #   깨져 "궤적을 안 건드렸다" 를 증명할 수 없다.
+    # 진단은 반드시 별도 파일 -- 본 JSON 에 섞으면 on/off md5 대조가 깨진다.
     if args.diag_kl:
         dk = net.model.inner.diag_kl_result()
         dk_out = os.path.splitext(args.out)[0] + ".diagkl.json"

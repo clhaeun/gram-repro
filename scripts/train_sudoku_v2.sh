@@ -8,14 +8,14 @@
 #      이 스크립트는 자기 위치 기준으로 repo 루트를 계산한다 (train_gc8_v2.sh 방식).
 #   2. logvar bias init 이 다르다. 과거 run 은 -4.0 (σ_init 0.135) 하드코딩이었고,
 #      현행 gram.py 는 nn.Parameter(torch.tensor(0.0)) 이라 σ_init = 1.0 이다.
-#      ★ 그래서 이 run 은 과거 결과의 재현이 아니라 현행 코드 기준 재측정이다.
+#      그래서 이 run 은 과거 결과의 재현이 아니라 현행 코드 기준 재측정이다.
 #
-# ★ kl_coef=0.1 은 sum 눈금이다. 환산하지 마라.
+# kl_coef=0.1 은 sum 눈금이다. 환산하지 마라.
 #   losses.py:90-95 가 `outputs["kl"].sum(-1).sum(-1).sum()` 으로 sum 고정이고,
 #   같은 주석(L91-92)이 gram_sudoku_halt_only 를 sum 쪽 run(71.85%)으로 지목한다.
 #   즉 과거 run 의 0.1 은 이미 현행과 같은 눈금이다. mean 쪽은 lmean_v2(1.8%).
 #
-# ★ data_paths 는 test10k 를 쓴다.
+# data_paths 는 test10k 를 쓴다.
 #   test/dataset.json 의 total_groups=422786 이 배열 10000행과 불일치하지만 무해하다:
 #   puzzle_dataset.py:170 `_iter_test` 가 len(dataset["inputs"]) 로 순회하고,
 #   pretrain.py:228 의 total_steps 는 train metadata 만 읽는다.
@@ -30,7 +30,7 @@ set -euo pipefail
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # scripts/ -> repo 루트
 
-# ★ python 경로가 서버마다 다르다 (34번 기준 venv-gram).
+# python 경로가 서버마다 다르다 (34번 기준 venv-gram).
 #     34번  ~/venv-gram/bin/activate
 #     50번  /opt/conda            (as-chaeun 경유)
 #     29번  ~/miniconda3/envs/gram

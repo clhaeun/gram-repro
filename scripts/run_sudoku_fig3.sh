@@ -5,7 +5,7 @@
 #     OUT=results/fig3/ema_s0_n20_h16.json bash scripts/run_sudoku_fig3.sh
 #
 # 각 GPU 가 연속 행 블록 하나를 맡고, 끝나면 --merge 로 원 행 순서대로 합친다.
-# ★ 샤딩 레이아웃이 바뀌면 행->노이즈 대응이 바뀐다 (RNG 는 배치 순서대로 소비).
+# 샤딩 레이아웃이 바뀌면 행->노이즈 대응이 바뀐다 (RNG 는 배치 순서대로 소비).
 #   평균은 표본오차 안에서 일치하지만 비트 동일하지는 않다.
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -26,7 +26,7 @@ OUT="${OUT:?OUT 필요}"
 
 IFS=',' read -ra GARR <<< "$GPUS"
 NS=${#GARR[@]}
-# ★ 산출 디렉토리를 chaeun 으로 만든다.  root 셸이 mkdir 하면 755 root 소유가 되고
+# 산출 디렉토리를 chaeun 으로 만든다.  root 셸이 mkdir 하면 755 root 소유가 되고
 #   as-chaeun 쓰기가 마지막 줄에서 PermissionError 로 죽는다
 #   (reports/INCIDENT_20260807_perm.md: nq8 σ 스윕 7셀 소실).
 as-chaeun mkdir -p "$(dirname "$OUT")" logs
