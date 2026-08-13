@@ -1,0 +1,2 @@
+[fprm_s0p] T=929 a=[22.5940,22.6250] d[1:10]=0.9920 0.9701 0.7330 0.5982 0.3610 0.2344 0.1768 0.1490 0.1224 0.1048 d[-5:]=0.0004 0.0004 0.0004 0.0004 0.0004
+[out] /workspace/fprm/results/figdata/residual_fprm_s0p.csv  /workspace/fprm/results/figdata/traj_fprm_s0p.npz (561,907,618 B)

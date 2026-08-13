@@ -1,0 +1,98 @@
+{
+  "checkpoint": "checkpoints/Graph-coloring-8-ACT-torch/gc8_paper_34/step_45540",
+  "n": 255,
+  "N": 20,
+  "n_puzzles": 255,
+  "n_nodes": 8,
+  "seed": 0,
+  "sigma_scale": 1.0,
+  "conflict": {
+    "mean": {
+      "conflicts_mean": 0.3,
+      "conflicts_std": 0.6310588673948311,
+      "conflicts_std_across_puzzles": 0.33269546812333334,
+      "colors_ok_rate": 0.9980392156862745,
+      "conflicts_mean_colors_ok": 0.3,
+      "conflicts_std_colors_ok": 0.6310405539635007,
+      "valid_rate": 0.7658823529411765,
+      "num_colors_used_mean": 2.997843137254902,
+      "n_samples": 20,
+      "n_scored": 5100
+    },
+    "maj": {
+      "conflicts_mean": 0.09411764705882353,
+      "conflicts_std": 0.30512727315963784,
+      "conflicts_std_across_puzzles": 0.30512727315963784,
+      "colors_ok_rate": 1.0,
+      "conflicts_mean_colors_ok": 0.09411764705882353,
+      "conflicts_std_colors_ok": 0.30512727315963784,
+      "valid_rate": 0.9098039215686274,
+      "num_colors_used_mean": 3.0,
+      "n_samples": 1,
+      "n_scored": 255
+    },
+    "lprm": {
+      "conflicts_mean": 0.2549019607843137,
+      "conflicts_std": 0.5685598337079039,
+      "conflicts_std_across_puzzles": 0.5685598337079039,
+      "colors_ok_rate": 1.0,
+      "conflicts_mean_colors_ok": 0.2549019607843137,
+      "conflicts_std_colors_ok": 0.5685598337079039,
+      "valid_rate": 0.788235294117647,
+      "num_colors_used_mean": 3.0,
+      "n_samples": 1,
+      "n_scored": 255
+    }
+  },
+  "prior_all_samples": {
+    "conflicts_mean": 0.3,
+    "conflicts_std": 0.6310588673948311,
+    "conflicts_std_across_puzzles": 0.33269546812333334,
+    "colors_ok_rate": 0.9980392156862745,
+    "conflicts_mean_colors_ok": 0.3,
+    "conflicts_std_colors_ok": 0.6310405539635007,
+    "valid_rate": 0.7658823529411765,
+    "num_colors_used_mean": 2.997843137254902,
+    "n_samples": 20,
+    "n_scored": 5100
+  },
+  "conflict_mean": 0.3,
+  "conflict_maj": 0.09411764705882353,
+  "conflict_lprm": 0.2549019607843137,
+  "majority_at_N_valid_canonical": 0.9098039215686274,
+  "verifier_selected_at_N_valid": 0.788235294117647,
+  "coverage_at_20": {
+    "coverage": 0.827759644132193,
+    "n_puzzles_scored": 255,
+    "n_puzzles_no_total": 0,
+    "found_mean": 3.0549019607843135,
+    "total_mean": 4.7215686274509805,
+    "n_found_gt_total": 0,
+    "by_solution_bucket": {
+      "1": {
+        "n": 70,
+        "coverage": 0.9571428571428572,
+        "found_mean": 0.9571428571428572,
+        "total_mean": 1.0
+      },
+      "2-5": {
+        "n": 125,
+        "coverage": 0.8553333333333333,
+        "found_mean": 2.52,
+        "total_mean": 3.0
+      },
+      "6-20": {
+        "n": 50,
+        "coverage": 0.6669343434343434,
+        "found_mean": 5.76,
+        "total_mean": 8.96
+      },
+      "21+": {
+        "n": 10,
+        "coverage": 0.3815325415325415,
+        "found_mean": 10.9,
+        "total_mean": 31.1
+      }
+    }
+  }
+}

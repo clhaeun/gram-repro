@@ -1,0 +1,61 @@
+{
+  "N": 20,
+  "seed": 1,
+  "sigma_scale": 1.0,
+  "mu_scale": 1.0,
+  "halt_max_steps": 16,
+  "checkpoint": "checkpoints/Sudoku-extreme-1k-aug-1000-test10k-v2-ACT-torch/sudoku_paper_34_eval50/step_65100",
+  "data": "data/sudoku-extreme-1k-aug-1000/test",
+  "limit": 20000,
+  "unconditional": false,
+  "shard_count": 4,
+  "n_total_in_split": 422786,
+  "n": 20000,
+  "shard_range": [
+    0,
+    20000
+  ],
+  "merged_from": [
+    "reports/sudoku50/n20000_hms16_N20_h1_shard0of4.json",
+    "reports/sudoku50/n20000_hms16_N20_h1_shard1of4.json",
+    "reports/sudoku50/n20000_hms16_N20_h1_shard2of4.json",
+    "reports/sudoku50/n20000_hms16_N20_h1_shard3of4.json"
+  ],
+  "shard_ns": [
+    5000,
+    5000,
+    5000,
+    5000
+  ],
+  "prior_all_samples": {
+    "exact": 0.593925,
+    "solved": 0.593925,
+    "valid": 0.5970375000000001,
+    "consistent": 0.9966974999999999,
+    "digits_ok": 1.0,
+    "violations_mean": 7.659590000000001,
+    "clue_breaks_mean": 0.0033049999999999998
+  },
+  "pass_at_N": {
+    "exact": 0.8213,
+    "solved": 0.8213
+  },
+  "majority_at_N": {
+    "exact": 0.7705,
+    "solved": 0.7705,
+    "valid": 0.77105,
+    "consistent": 0.99945,
+    "digits_ok": 1.0,
+    "violations_mean": 4.49865,
+    "clue_breaks_mean": 0.00055
+  },
+  "verifier_selected_at_N": {
+    "exact": 0.81555,
+    "solved": 0.81555,
+    "valid": 0.8202,
+    "consistent": 0.99535,
+    "digits_ok": 1.0,
+    "violations_mean": 3.25915,
+    "clue_breaks_mean": 0.00465
+  }
+}

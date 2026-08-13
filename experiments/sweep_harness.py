@@ -12,7 +12,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from experiments.gram_harness import load_model, rollout   # noqa: E402
-from evaluators.nqueens import verify_boards               # noqa: E402
+from evaluators.nqueens import queen_key, verify_boards    # noqa: E402
 
 
 def flat_stats(preds, inputs, n):
@@ -51,13 +51,16 @@ SOL_BUCKETS = [("1", 1, 1), ("2-5", 2, 5), ("6-20", 6, 20), ("21+", 21, 10 ** 9)
 
 def coverage_at_N(cand, inputs, n, totals):
     """③ Coverage@20 (Table 1): mean_x(found/total).  found = valid∧consistent unique
-    (힌트 어긴 valid 보드는 해집합 밖이라 consistent 필수 -- n_found_gt_total=0 이 검산)."""
+    (힌트 어긴 valid 보드는 해집합 밖이라 consistent 필수 -- n_found_gt_total=0 이 검산).
+
+    ★ 유일화 키는 nqueens.queen_key (퀸 칸 인덱스).  전에는 tuple(cand[k, b]) 로
+      토큰 벡터를 유일화해 빈칸 토큰 차이가 중복 계수됐다."""
     N, B, L = cand.shape
     r = verify_boards(cand.reshape(N * B, L), np.tile(inputs, (N, 1)), n)
     ok = (r["valid"] & r["consistent"]).reshape(N, B)
     found = np.zeros(B, dtype=np.int64)
     for b in range(B):
-        found[b] = len({tuple(cand[k, b]) for k in range(N) if ok[k, b]})
+        found[b] = len({queen_key(cand[k, b]) for k in range(N) if ok[k, b]})
     have = totals > 0
     cov = np.zeros(B, dtype=np.float64)
     cov[have] = found[have] / totals[have]

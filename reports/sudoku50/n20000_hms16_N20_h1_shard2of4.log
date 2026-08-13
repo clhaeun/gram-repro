@@ -1,0 +1,48 @@
+/workspace/TinyRecursiveModels/pretrain.py:287: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  state_dict = torch.load(config.load_checkpoint, map_location="cuda")
+TinyRecursiveReasoningModel_ACTV1(
+  (inner): TinyRecursiveReasoningModel_ACTV1_Inner(
+    (embed_tokens): CastedEmbedding()
+    (lm_head): CastedLinear()
+    (q_head): CastedLinear()
+    (puzzle_emb): CastedSparseEmbedding()
+    (L_level): TinyRecursiveReasoningModel_ACTV1ReasoningModule(
+      (layers): ModuleList(
+        (0-1): 2 x TinyRecursiveReasoningModel_ACTV1Block(
+          (mlp_t): SwiGLU(
+            (gate_up_proj): CastedLinear()
+            (down_proj): CastedLinear()
+          )
+          (mlp): SwiGLU(
+            (gate_up_proj): CastedLinear()
+            (down_proj): CastedLinear()
+          )
+        )
+      )
+    )
+    (prior_mu): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (prior_logvar): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (post_mu): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (post_logvar): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (lrpm_head): CastedLinear()
+  )
+)
+Loading checkpoint checkpoints/Sudoku-extreme-1k-aug-1000-test10k-v2-ACT-torch/sudoku_paper_34_eval50/step_65100
+checkpoints/Sudoku-extreme-1k-aug-1000-test10k-v2-ACT-torch/sudoku_paper_34_eval50/step_65100  hms=16 N=20 n=5000
+  prior  exact=0.6104 solved=0.6104 valid=0.6130 consistent=0.9972
+  pass@N exact=0.8394 solved=0.8394
+  maj@N  exact=0.7906 solved=0.7906
+  vsel@N exact=0.8346 solved=0.8346
+  [out] reports/sudoku50/n20000_hms16_N20_h1_shard2of4.json

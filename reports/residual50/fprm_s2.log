@@ -1,0 +1,2 @@
+[fprm_s2] T=1000 a=[22.6209,22.6270] d[1:10]=0.9948 0.5702 1.0618 0.5553 0.3035 0.2401 0.1310 0.0918 0.2474 0.3605 d[-5:]=0.0002 0.0002 0.0002 0.0002 0.0001
+[out] /workspace/fprm/results/figdata/residual_fprm_s2.csv  /workspace/fprm/results/figdata/traj_fprm_s2.npz (549,823,610 B)

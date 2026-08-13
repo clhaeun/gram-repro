@@ -1,0 +1,98 @@
+{
+  "checkpoint": "checkpoints/Graph-coloring-8-ACT-torch/gc8_paper_34/step_45540.live",
+  "n": 1204,
+  "N": 20,
+  "n_puzzles": 1204,
+  "n_nodes": 8,
+  "seed": 0,
+  "sigma_scale": 1.0,
+  "conflict": {
+    "mean": {
+      "conflicts_mean": 0.04240033222591362,
+      "conflicts_std": 0.21640651545978098,
+      "conflicts_std_across_puzzles": 0.1025544302440432,
+      "colors_ok_rate": 1.0,
+      "conflicts_mean_colors_ok": 0.04240033222591362,
+      "conflicts_std_colors_ok": 0.21640651545978098,
+      "valid_rate": 0.9601744186046511,
+      "num_colors_used_mean": 2.9980481727574753,
+      "n_samples": 20,
+      "n_scored": 24080
+    },
+    "maj": {
+      "conflicts_mean": 0.0049833887043189366,
+      "conflicts_std": 0.07041700463198222,
+      "conflicts_std_across_puzzles": 0.07041700463198222,
+      "colors_ok_rate": 1.0,
+      "conflicts_mean_colors_ok": 0.0049833887043189366,
+      "conflicts_std_colors_ok": 0.07041700463198222,
+      "valid_rate": 0.9950166112956811,
+      "num_colors_used_mean": 3.0,
+      "n_samples": 1,
+      "n_scored": 1204
+    },
+    "lprm": {
+      "conflicts_mean": 0.03903654485049834,
+      "conflicts_std": 0.20207659971616207,
+      "conflicts_std_across_puzzles": 0.20207659971616207,
+      "colors_ok_rate": 1.0,
+      "conflicts_mean_colors_ok": 0.03903654485049834,
+      "conflicts_std_colors_ok": 0.20207659971616207,
+      "valid_rate": 0.9626245847176079,
+      "num_colors_used_mean": 3.0,
+      "n_samples": 1,
+      "n_scored": 1204
+    }
+  },
+  "prior_all_samples": {
+    "conflicts_mean": 0.04240033222591362,
+    "conflicts_std": 0.21640651545978098,
+    "conflicts_std_across_puzzles": 0.1025544302440432,
+    "colors_ok_rate": 1.0,
+    "conflicts_mean_colors_ok": 0.04240033222591362,
+    "conflicts_std_colors_ok": 0.21640651545978098,
+    "valid_rate": 0.9601744186046511,
+    "num_colors_used_mean": 2.9980481727574753,
+    "n_samples": 20,
+    "n_scored": 24080
+  },
+  "conflict_mean": 0.04240033222591362,
+  "conflict_maj": 0.0049833887043189366,
+  "conflict_lprm": 0.03903654485049834,
+  "majority_at_N_valid_canonical": 0.9950166112956811,
+  "verifier_selected_at_N_valid": 0.9626245847176079,
+  "coverage_at_20": {
+    "coverage": 0.7012264071753275,
+    "n_puzzles_scored": 1204,
+    "n_puzzles_no_total": 0,
+    "found_mean": 6.8023255813953485,
+    "total_mean": 14.692691029900333,
+    "n_found_gt_total": 0,
+    "by_solution_bucket": {
+      "1": {
+        "n": 70,
+        "coverage": 1.0,
+        "found_mean": 1.0,
+        "total_mean": 1.0
+      },
+      "2-5": {
+        "n": 375,
+        "coverage": 0.9148888888888889,
+        "found_mean": 3.013333333333333,
+        "total_mean": 3.3413333333333335
+      },
+      "6-20": {
+        "n": 448,
+        "coverage": 0.698562353445166,
+        "found_mean": 6.870535714285714,
+        "total_mean": 10.28125
+      },
+      "21+": {
+        "n": 311,
+        "coverage": 0.3801843297824005,
+        "found_mean": 12.578778135048232,
+        "total_mean": 37.81672025723473
+      }
+    }
+  }
+}

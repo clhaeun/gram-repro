@@ -32,6 +32,21 @@ import torch.distributed as dist
 QUEEN = 2
 
 
+def queen_key(board: np.ndarray) -> tuple:
+    """해 유일화(dedupe)용 정규 키 = ★퀸 칸 인덱스만★.
+
+    verify_boards 는 `preds == QUEEN` 만 읽으므로 빈칸 토큰 값(1 / PAD 0 / 그 외)은
+    valid·consistent 판정에 들어가지 않는다.  그런데 `tuple(board)` 로 유일화하면
+    퀸 배치가 같아도 빈칸 토큰 하나가 다르면 서로 다른 해로 세어져 found 가 부풀고
+    n_found_gt_total 이 0 을 넘는다 (FPRM S3 가 빈칸에 PAD 0 을 섞어 내는 사례:
+    reports/RESULT_found_gt_total_50.md).  퀸 위치만으로 키를 만들어 그 경로를 막는다.
+
+    소비자: experiments/sweep_harness.py · experiments/coverage_curve.py ·
+    experiments/perpuzzle_dump.py · /workspace/fprm/experiments/fprm_harness.py
+    """
+    return tuple(np.flatnonzero(board == QUEEN).tolist())
+
+
 # 학습 시 제공한 정답지와 얼마나 일치하는지 x
 # 체스 룰을 제대로 지켰는지 rule-based로 처리
 def verify_boards(preds: np.ndarray, inputs: np.ndarray, n: int) -> Dict[str, np.ndarray]:

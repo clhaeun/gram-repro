@@ -1,0 +1,116 @@
+{
+  "n": 20000,
+  "N": 20,
+  "task": "sudoku",
+  "single": 0.59295,
+  "mean_sample": 0.59397,
+  "by_k": {
+    "1": {
+      "majority": 0.59295,
+      "pass": 0.5939700000000001,
+      "pass_first_k": 0.59295,
+      "verifier_selected": 0.59295,
+      "lprm_best": 0.59295,
+      "distinct": 1.0,
+      "verifier_hit_rate": 0.59295
+    },
+    "5": {
+      "majority": 0.6691,
+      "pass": 0.7355817982456141,
+      "pass_first_k": 0.73405,
+      "verifier_selected": 0.73405,
+      "lprm_best": 0.7297,
+      "distinct": 2.7628,
+      "verifier_hit_rate": 0.73405
+    },
+    "20": {
+      "majority": 0.76935,
+      "pass": 0.82135,
+      "pass_first_k": 0.82135,
+      "verifier_selected": 0.82135,
+      "lprm_best": 0.81555,
+      "distinct": 8.9294,
+      "verifier_hit_rate": 0.82135
+    }
+  },
+  "verifier_precision": 1.0,
+  "verifier_pass_rate": 0.59397,
+  "hits_histogram": {
+    "0": 3573,
+    "1": 1073,
+    "2": 701,
+    "3": 535,
+    "4": 447,
+    "5": 406,
+    "6": 355,
+    "7": 300,
+    "8": 323,
+    "9": 309,
+    "10": 276,
+    "11": 306,
+    "12": 314,
+    "13": 300,
+    "14": 327,
+    "15": 360,
+    "16": 416,
+    "17": 460,
+    "18": 665,
+    "19": 1203,
+    "20": 7351
+  },
+  "seed": 1,
+  "halt_max_steps": 16,
+  "sigma_scale": 1.0,
+  "offset": 0,
+  "limit": 20000,
+  "block_md5": "c71439f1ec74db357233ee0800ea31c7",
+  "ckpt": "checkpoints/Sudoku-extreme-1k-aug-1000-test10k-v2-ACT-torch/sudoku_paper_34_origdata/step_65100",
+  "data": "data/sudoku-extreme-1k-aug-1000/test",
+  "block_md5_12": "c71439f1ec74",
+  "merged_inputs_md5_12": "c71439f1ec74",
+  "num_shards": 8,
+  "shard_rows": [
+    [
+      0,
+      2500
+    ],
+    [
+      2500,
+      5000
+    ],
+    [
+      5000,
+      7500
+    ],
+    [
+      7500,
+      10000
+    ],
+    [
+      10000,
+      12500
+    ],
+    [
+      12500,
+      15000
+    ],
+    [
+      15000,
+      17500
+    ],
+    [
+      17500,
+      20000
+    ]
+  ],
+  "elapsed_s_per_shard": [
+    951.4828779697418,
+    1015.5837895870209,
+    989.5264792442322,
+    1040.4699928760529,
+    945.5217905044556,
+    1025.5510232448578,
+    975.1709311008453,
+    952.201069355011
+  ]
+}

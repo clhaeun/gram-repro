@@ -1,0 +1,116 @@
+{
+  "n": 4000,
+  "N": 20,
+  "task": "sudoku",
+  "single": 0.5675,
+  "mean_sample": 0.57185,
+  "by_k": {
+    "1": {
+      "majority": 0.5675,
+      "pass": 0.57185,
+      "pass_first_k": 0.5675,
+      "verifier_selected": 0.5675,
+      "lprm_best": 0.5675,
+      "distinct": 1.0,
+      "verifier_hit_rate": 0.5675
+    },
+    "5": {
+      "majority": 0.64175,
+      "pass": 0.710829334365325,
+      "pass_first_k": 0.71025,
+      "verifier_selected": 0.71025,
+      "lprm_best": 0.70725,
+      "distinct": 2.867,
+      "verifier_hit_rate": 0.71025
+    },
+    "20": {
+      "majority": 0.74225,
+      "pass": 0.799,
+      "pass_first_k": 0.799,
+      "verifier_selected": 0.799,
+      "lprm_best": 0.79325,
+      "distinct": 9.34425,
+      "verifier_hit_rate": 0.799
+    }
+  },
+  "verifier_precision": 1.0,
+  "verifier_pass_rate": 0.57185,
+  "hits_histogram": {
+    "0": 804,
+    "1": 233,
+    "2": 143,
+    "3": 99,
+    "4": 88,
+    "5": 72,
+    "6": 64,
+    "7": 67,
+    "8": 62,
+    "9": 60,
+    "10": 61,
+    "11": 73,
+    "12": 55,
+    "13": 47,
+    "14": 57,
+    "15": 72,
+    "16": 72,
+    "17": 104,
+    "18": 136,
+    "19": 219,
+    "20": 1412
+  },
+  "seed": 0,
+  "halt_max_steps": 16,
+  "sigma_scale": 1.0,
+  "offset": 0,
+  "limit": 4000,
+  "block_md5": "9bb82c414a700ee096f9ba685994730f",
+  "ckpt": "checkpoints/Sudoku-extreme-1k-aug-1000-test10k-v2-ACT-torch/sudoku_paper_34_origdata/step_65100",
+  "data": "data/sudoku-extreme-1k-aug-1000/test",
+  "block_md5_12": "9bb82c414a70",
+  "merged_inputs_md5_12": "9bb82c414a70",
+  "num_shards": 8,
+  "shard_rows": [
+    [
+      0,
+      500
+    ],
+    [
+      500,
+      1000
+    ],
+    [
+      1000,
+      1500
+    ],
+    [
+      1500,
+      2000
+    ],
+    [
+      2000,
+      2500
+    ],
+    [
+      2500,
+      3000
+    ],
+    [
+      3000,
+      3500
+    ],
+    [
+      3500,
+      4000
+    ]
+  ],
+  "elapsed_s_per_shard": [
+    188.50797176361084,
+    199.35407543182373,
+    195.1732029914856,
+    204.82247138023376,
+    189.71488642692566,
+    202.624990940094,
+    192.92507004737854,
+    190.12975668907166
+  ]
+}

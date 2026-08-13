@@ -1,0 +1,23 @@
+{
+  "checkpoint": "checkpoints/Nqueens-10-ACT-torch/nq10_repro_s0/step_138534",
+  "N": 20,
+  "seed": 0,
+  "limit": 2048,
+  "rows": 2048,
+  "hms": 16,
+  "n_found_gt_total_token": 0,
+  "n_found_gt_total_queens": 0,
+  "n_rows_token_gt_queens": 0,
+  "sum_found_token": 11681,
+  "sum_found_queens": 11681,
+  "sum_n_solutions": 28190,
+  "pred_token_value_counts_all": {
+    "1": 3692106,
+    "2": 403894
+  },
+  "pred_token_value_counts_valid_consistent": {
+    "1": 3530610,
+    "2": 392290
+  },
+  "examples_found_gt_total": []
+}

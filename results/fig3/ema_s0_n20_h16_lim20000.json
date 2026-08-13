@@ -1,0 +1,116 @@
+{
+  "n": 20000,
+  "N": 20,
+  "task": "sudoku",
+  "single": 0.5944,
+  "mean_sample": 0.59318,
+  "by_k": {
+    "1": {
+      "majority": 0.5944,
+      "pass": 0.59318,
+      "pass_first_k": 0.5944,
+      "verifier_selected": 0.5944,
+      "lprm_best": 0.5944,
+      "distinct": 1.0,
+      "verifier_hit_rate": 0.5944
+    },
+    "5": {
+      "majority": 0.6687,
+      "pass": 0.7347209139576883,
+      "pass_first_k": 0.7342,
+      "verifier_selected": 0.7342,
+      "lprm_best": 0.7297,
+      "distinct": 2.7705,
+      "verifier_hit_rate": 0.7342
+    },
+    "20": {
+      "majority": 0.7685,
+      "pass": 0.82085,
+      "pass_first_k": 0.82085,
+      "verifier_selected": 0.82085,
+      "lprm_best": 0.81455,
+      "distinct": 8.94395,
+      "verifier_hit_rate": 0.82085
+    }
+  },
+  "verifier_precision": 1.0,
+  "verifier_pass_rate": 0.59318,
+  "hits_histogram": {
+    "0": 3583,
+    "1": 1105,
+    "2": 672,
+    "3": 549,
+    "4": 446,
+    "5": 387,
+    "6": 324,
+    "7": 322,
+    "8": 312,
+    "9": 298,
+    "10": 313,
+    "11": 311,
+    "12": 322,
+    "13": 308,
+    "14": 334,
+    "15": 362,
+    "16": 366,
+    "17": 495,
+    "18": 704,
+    "19": 1127,
+    "20": 7360
+  },
+  "seed": 0,
+  "halt_max_steps": 16,
+  "sigma_scale": 1.0,
+  "offset": 0,
+  "limit": 20000,
+  "block_md5": "c71439f1ec74db357233ee0800ea31c7",
+  "ckpt": "checkpoints/Sudoku-extreme-1k-aug-1000-test10k-v2-ACT-torch/sudoku_paper_34_origdata/step_65100",
+  "data": "data/sudoku-extreme-1k-aug-1000/test",
+  "block_md5_12": "c71439f1ec74",
+  "merged_inputs_md5_12": "c71439f1ec74",
+  "num_shards": 8,
+  "shard_rows": [
+    [
+      0,
+      2500
+    ],
+    [
+      2500,
+      5000
+    ],
+    [
+      5000,
+      7500
+    ],
+    [
+      7500,
+      10000
+    ],
+    [
+      10000,
+      12500
+    ],
+    [
+      12500,
+      15000
+    ],
+    [
+      15000,
+      17500
+    ],
+    [
+      17500,
+      20000
+    ]
+  ],
+  "elapsed_s_per_shard": [
+    948.1011867523193,
+    1017.8667907714844,
+    992.4241421222687,
+    1039.7859380245209,
+    945.9133620262146,
+    1027.074223279953,
+    977.020673751831,
+    948.1485290527344
+  ]
+}

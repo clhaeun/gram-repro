@@ -1,0 +1,45 @@
+/workspace/TinyRecursiveModels/pretrain.py:287: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  state_dict = torch.load(config.load_checkpoint, map_location="cuda")
+TinyRecursiveReasoningModel_ACTV1(
+  (inner): TinyRecursiveReasoningModel_ACTV1_Inner(
+    (embed_tokens): CastedEmbedding()
+    (lm_head): CastedLinear()
+    (q_head): CastedLinear()
+    (puzzle_emb): CastedSparseEmbedding()
+    (rotary_emb): RotaryEmbedding()
+    (L_level): TinyRecursiveReasoningModel_ACTV1ReasoningModule(
+      (layers): ModuleList(
+        (0-1): 2 x TinyRecursiveReasoningModel_ACTV1Block(
+          (self_attn): Attention(
+            (qkv_proj): CastedLinear()
+            (o_proj): CastedLinear()
+          )
+          (mlp): SwiGLU(
+            (gate_up_proj): CastedLinear()
+            (down_proj): CastedLinear()
+          )
+        )
+      )
+    )
+    (prior_mu): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (prior_logvar): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (post_mu): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (post_logvar): SwiGLU(
+      (gate_up_proj): CastedLinear()
+      (down_proj): CastedLinear()
+    )
+    (lrpm_head): CastedLinear()
+  )
+)
+Loading checkpoint checkpoints/Nqueens-8-ACT-torch/nq8_final_add_s0/step_67428
+[nq8_sig0] T=48 a=[22.6103,23.7050] d[1:10]=1.2013 1.0128 0.5702 0.2756 0.1914 0.1562 0.1185 0.1037 0.0877 0.0806 d[-5:]=0.0610 0.0610 0.0609 0.0610 0.0610
+[out] results/figdata/residual_nq8_sig0.csv  results/figdata/traj_nq8_sig0.npz (4,032,286 B)
