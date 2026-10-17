@@ -73,15 +73,11 @@ def pass_at_N(cand: np.ndarray, inputs: np.ndarray, labels: np.ndarray) -> dict:
     return {"exact": float(ok_e.any(0).mean()), "solved": float(ok_s.any(0).mean())}
 
 
-# --------------------------------------------------------------------------- #
-# selftest -- CPU only, 모델 불필요
-# --------------------------------------------------------------------------- #
 def selftest(data: str) -> None:
     inputs = np.load(os.path.join(data, "all__inputs.npy")).astype(np.int64)[:256]
     labels = np.load(os.path.join(data, "all__labels.npy")).astype(np.int64)[:256]
     B = len(inputs)
 
-    # (a) 정답 라벨 -> exact 1.0, 위반 0, 단서 보존 통과
     r = verify_boards(labels, inputs)
     a = rate_block(labels, inputs, labels)
     assert a["exact"] == 1.0, a
@@ -91,7 +87,6 @@ def selftest(data: str) -> None:
     print(f"[selftest a] 라벨      exact=1.0 valid=1.0 consistent=1.0 "
           f"violations={int(r['violations'].sum())} clue_breaks={int(r['clue_breaks'].sum())}")
 
-    # (b) 무작위 보드 -> exact 0.0, 위반 다수
     rng = np.random.default_rng(0)
     rnd = rng.integers(2, 11, size=(B, SEQ_LEN))
     rb = verify_boards(rnd, inputs)
@@ -101,7 +96,6 @@ def selftest(data: str) -> None:
     print(f"[selftest b] 무작위    exact=0.0 valid=0.0 "
           f"violations_mean={rb['violations'].mean():.2f}/27 (min {int(rb['violations'].min())})")
 
-    # (c) 라벨 1칸 변조 -> exact 0.0, 위반 검출
     bad = labels.copy()
     cell = rng.integers(0, SEQ_LEN, size=B)
     cur = bad[np.arange(B), cell]
@@ -113,8 +107,6 @@ def selftest(data: str) -> None:
     print(f"[selftest c] 1칸 변조  exact=0.0 valid={c['valid']:.4f} "
           f"violations_mean={cb['violations'].mean():.2f} (min {int(cb['violations'].min())})")
 
-    # (d) ★단서 1칸 변조 -> 단서 보존 실패 검출★
-    #     퍼즐마다 단서 한 칸을 골라 다른 숫자로 바꾼다.
     clue_bad = labels.copy()
     for i in range(B):
         pos = np.nonzero(inputs[i] != BLANK)[0]
@@ -128,9 +120,6 @@ def selftest(data: str) -> None:
     print(f"[selftest d] 단서1칸   consistent=0.0 clue_breaks=1 (전건) "
           f"solved=0.0 exact=0.0 violations_mean={d1b['violations'].mean():.2f}")
 
-    # (d2) ★제약은 전부 통과하지만 문제와 다른 보드★ -- consistent 가 없으면
-    #      이게 통과해 버린다는 것을 보이는 케이스.  라벨 전체에 숫자 재라벨링
-    #      (1..9 순환)을 걸면 행/열/박스 순열 제약은 그대로 살아 있고 단서만 어긋난다.
     relabel = labels.copy()
     relabel = 2 + (relabel - 2 + 1) % 9
     d2b = verify_boards(relabel, inputs)
@@ -149,7 +138,6 @@ def selftest(data: str) -> None:
           f"d2 재라벨=valid1 이지만 consistent0)")
 
 
-# --------------------------------------------------------------------------- #
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--selftest", action="store_true")
@@ -159,21 +147,12 @@ def main() -> None:
     ap.add_argument("--data", default="data/sudoku-extreme-1k-aug-1000/test")
     ap.add_argument("--N", type=int, default=20, help="병렬 샘플 수 (Figure 4 의 곡선축)")
     ap.add_argument("--seed", type=int, default=0)
-    # 추론 시 스케일링.  학습 시 ablation 인 논문 Table 3b 와 직접 대응하지 않는다.
     ap.add_argument("--sigma-scale", type=float, default=1.0)
     ap.add_argument("--mu-scale", type=float, default=1.0)
-    # ★ Figure 4(left) 의 x축.  eval 에선 gram.py 의 halted = (new_steps >=
-    #   halt_max_steps) 만 남으므로 supervision step 수 = 이 값이다.
-    #   None = 체크포인트 학습값 그대로.
     ap.add_argument("--halt-max-steps", type=int, default=None)
-    # 기본은 전수(422,786).  쓰면 결과 JSON 에 기록된다.
     ap.add_argument("--limit", type=int, default=None)
-    # 422k 를 여러 GPU 로 나눠 돌기 위한 연속 블록 분할.  --limit 적용 후에 자른다.
-    # 모든 지표가 퍼즐 평균이라 샤드별 n 가중평균으로 정확히 합쳐진다
-    # (experiments/merge_sudoku_shards.py).
     ap.add_argument("--shard-index", type=int, default=0)
     ap.add_argument("--shard-count", type=int, default=1)
-    # ③ Figure 5 설계용.  §설계 확인 참조 -- 지금은 기본 off.
     ap.add_argument("--unconditional", action="store_true")
     args = ap.parse_args()
 
@@ -185,7 +164,6 @@ def main() -> None:
 
     net, _ = load_model(args.ckpt_dir, args.step)
     if args.halt_max_steps is not None:
-        # sweep_harness.py:117-118 과 같은 경로.  config 객체는 inner 와 공유된다.
         net.model.config.halt_max_steps = args.halt_max_steps
 
     inputs = np.load(os.path.join(args.data, "all__inputs.npy")).astype(np.int64)
@@ -193,7 +171,6 @@ def main() -> None:
     n_total = len(inputs)
     if args.limit is not None:
         inputs, labels = inputs[: args.limit], labels[: args.limit]
-    # 연속 블록 샤딩.  경계는 np.linspace 로 잡아 전 샤드 합이 정확히 전수가 된다.
     assert 0 <= args.shard_index < args.shard_count, "shard-index 범위 오류"
     bounds = np.linspace(0, len(inputs), args.shard_count + 1).astype(int)
     lo, hi = int(bounds[args.shard_index]), int(bounds[args.shard_index + 1])
@@ -202,9 +179,6 @@ def main() -> None:
     B = len(inputs)
 
     if args.unconditional:
-        # ③ Figure 5: 빈 판에서 생성.  단서가 없으므로 consistent 는 자명하게 1 이고
-        #   valid 만 의미가 있다.  labels 는 mode="prior" 경로에서 읽히지 않는다
-        #   (gram.py:434 `y_emb = ... if use_posterior else None`) -- 아래 §설계 확인.
         inputs = np.full((B, SEQ_LEN), BLANK, dtype=np.int64)
         labels = np.zeros((B, SEQ_LEN), dtype=np.int64)
 
@@ -224,11 +198,8 @@ def main() -> None:
         "unconditional": bool(args.unconditional),
     }
 
-    # ① 전 샘플 평균 (N=1 이면 그대로 단일시도 정확도)
     res["prior_all_samples"] = flat_stats(cand, inputs, labels)
-    # 선택기 없는 상한
     res["pass_at_N"] = pass_at_N(cand, inputs, labels)
-    # ④ 선택기 둘
     maj = np.stack([majority_row(cand[:, b, :]) for b in range(B)])
     sel = np.stack([cand[int(np.argmax(v[:, b])), b, :] for b in range(B)])
     res["majority_at_N"] = rate_block(maj, inputs, labels)
