@@ -1,24 +1,28 @@
 # GRAM Reproduction
 
-Reproduction and analysis of GRAM, a recursive reasoning model, based on the [TinyRecursiveModels](https://github.com/SamsungSAILMontreal/TinyRecursiveModels) codebase.
+Reproduction and analysis of GRAM based on the [TinyRecursiveModels](https://github.com/SamsungSAILMontreal/TinyRecursiveModels) codebase.
 
-Experiments cover N-Queens, Graph Coloring, and Sudoku, with a focus on implementation details and evaluation behavior.
+Experiments on N-Queens, Graph Coloring, and Sudoku focused on implementation choices and evaluation behavior.
 
-## Scope
+## Work
 
-- Reproduced GRAM training and evaluation pipelines.
-- Investigated KL reduction, latent noise, and EMA checkpoint behavior.
-- Evaluated single-sample accuracy and multi-sample inference.
+- Implemented the GRAM model and training/evaluation pipeline.
+- Analyzed the effects of KL reduction, latent noise, and EMA evaluation.
+- Compared single-sample and multi-sample inference, including coverage and majority voting.
 
-## Repository
+## Code
 
-- `models/recursive_reasoning/gram.py` — GRAM implementation
-- `config/arch/` — model configurations
-- `dataset/`, `evaluators/` — datasets and task evaluation
-- `experiments/` — evaluation scripts and results
-- `REPORT_FINAL.md` — experiment summary and findings
+- [GRAM model](models/recursive_reasoning/gram.py)
+- [Training](pretrain.py) · [Configurations](config/arch/)
+- [Dataset generation](dataset/) · [Evaluators](evaluators/)
+- [N-Queens evaluation](experiments/sweep_harness.py) · [Graph Coloring evaluation](experiments/gc_harness.py) · [Sudoku evaluation](experiments/sudoku_harness.py)
 
-## References
+## Results
 
-- [TinyRecursiveModels](https://github.com/SamsungSAILMontreal/TinyRecursiveModels)
-- [GRAM experiment summary](REPORT_FINAL.md)
+Experimental findings and detailed measurements are recorded in [REPORT_FINAL.md](REPORT_FINAL.md), with supporting JSON files in [experiments/results/](experiments/results/).
+
+Model checkpoints and generated datasets are not included in this repository.
+
+## Reference
+
+[TinyRecursiveModels](https://github.com/SamsungSAILMontreal/TinyRecursiveModels)
