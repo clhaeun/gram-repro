@@ -1,27 +1,4 @@
-"""Shared plumbing for the current N-Queens / GC harnesses.
-
-GRAM's latent transition is stochastic, so K independent forward passes on the
-*same* input already give K distinct answers -- unlike TRM, which is deterministic
-and needs test-time augmentation for sample diversity.  Every rollout here is
-therefore plain repetition: no symmetry transform, no inverse mapping.
-
-Provides:
-  load_model()      checkpoint -> eager ACTLossHead (all_config.yaml + ema=False)
-  rollout()         K forward passes -> preds / v_logits / token accuracy
-  sigma_scale(), mu_scale()   rollout 이 쓰는 추론시 스케일링 컨텍스트
-
-소비자는 세 곳뿐이고 전부 load_model + rollout 만 쓴다:
-  experiments/sweep_harness.py  experiments/gc_harness.py  experiments/coverage_curve.py
-
-★ 2026-08-05 축소.  참조 0 으로 확인된 17종을 제거했다:
-    dist_setup dist_gather dist_teardown shard sharded_rollout load_puzzles
-    capture_kl capture_sigma pass_at_j majority_vote metrics auroc
-    print_hits_histogram save_json add_common_args out_dir_for SEQ_LEN
-  전부 experiments/legacy/gram_harness_legacy.py 에 그대로 남아 있고,
-  e1~e4 · sigma_probe · eval_harness 는 그쪽을 import 한다.
-  capture_* 프로브의 유래(diag_sigma.py pattern)와 kl_loss 호출 횟수 주석도
-  사본 쪽에 있다.  선례는 exp/diag_sigma.py.
-"""
+"""Shared model loading and stochastic rollouts for GRAM evaluation."""
 import os
 from contextlib import contextmanager
 
@@ -34,9 +11,6 @@ import pretrain as P
 PAD = 0                 # dataset.json: pad_id = ignore_label_id = 0
 
 
-# --------------------------------------------------------------------------- #
-# checkpoint / data loading
-# --------------------------------------------------------------------------- #
 def load_model(ckpt_dir, step):
     """eval_checkpoint.py pattern: all_config.yaml + load_checkpoint, ema=False.
 
@@ -48,11 +22,6 @@ def load_model(ckpt_dir, step):
     cfg.ema = False                  # checkpoint is already the EMA copy
     cfg.eval_save_outputs = []
     cfg.evaluators = []
-    # harness 는 추론만 한다 -- optimizer param_group 은 의미가 없다.  끄지 않으면
-    # pretrain.py 의 load_checkpoint 가 `load_state_dict(..., assign=True)` 로
-    # Parameter 객체를 통째로 교체하면서 fp_transformer 가 붙인 `_no_weight_decay`
-    # 속성이 사라지고, _adamw_param_arg 가 "마킹 0개" 로 보고 ValueError 로 즉사한다.
-    # (학습은 load_checkpoint=None 이라 이 경로를 안 타서 마킹 2개가 살아 있다.)
     cfg.nodecay_marked = False
     config = P.PretrainConfig(**OmegaConf.to_container(cfg, resolve=True))
 
@@ -76,14 +45,10 @@ def _batch(inputs, labels, lo, hi, batch_size):
     return {
         "inputs": torch.from_numpy(inp).cuda(),
         "labels": torch.from_numpy(lab).cuda(),
-        # test set has a single blank identifier (all__puzzle_identifiers is all-zero)
         "puzzle_identifiers": torch.zeros(batch_size, dtype=torch.int32).cuda(),
     }
 
 
-# --------------------------------------------------------------------------- #
-# probes
-# --------------------------------------------------------------------------- #
 @contextmanager
 def sigma_scale(net, scale):
     inner = net.model.inner
@@ -121,9 +86,6 @@ def mu_scale(net, scale):
         inner.reparameterize = orig
 
 
-# --------------------------------------------------------------------------- #
-# rollout
-# --------------------------------------------------------------------------- #
 @torch.inference_mode()
 def rollout(net, inputs, labels, K, sigma_scale_=1.0, mode="prior",
             batch_size=512, seed=0, verbose=True, mu_scale_=1.0):
