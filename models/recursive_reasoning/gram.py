@@ -41,7 +41,6 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     H_layers: int # ignored
     L_layers: int
 
-    # Transformer config
     hidden_size: int
     expansion: float
     num_heads: int
@@ -51,8 +50,6 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     rope_theta: float = 10000.
     
 
-    # --- FPRM 기여1: pre-norm + residual scaling (fp_transformer) ----------
-    # False = 기존 ReasoningModule 경로 그대로. 기존 yaml/checkpoint 무영향.
     use_fp_transformer: bool = False
     norm_type: str = "pre-norm"               # 'pre-norm'|'post-norm'|'peri-norm'
     residual_scale: Optional[str] = "fixed"   # None|'fixed'|'input-independent'|'input-dependent'
@@ -69,7 +66,6 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     use_spec_norm_linear: bool = False
     weight_dropout: float = 0.0
 
-    # Halting Q-learning config
     halt_max_steps: int
     halt_exploration_prob: float
 
@@ -84,35 +80,17 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     kl_balance: float = 0.8
     lprm_coef: float = 1.0
 
-    # ε 주입 계수. FPRM Theorem 1 의 유계성은 "모든 덧셈에 계수" 를 전제하는데
-    # GRAM 의 z_H = z_H + eps 만 계수가 없어 그 자리에서 보장이 깨진다.
-    # 1.0 = 현행과 비트 단위 동일.
     eps_scale: float = 1.0
 
-    # inner z_L loop damped update. 1.0 = 현행과 비트 단위 동일.
-    # η 고정. patience/adaptive 는 넣지 않는다 -- L_cycles(4) < FPRM patience(10) 이라
-    # 발동 기회 자체가 없다.
     damping_eta: float = 1.0
 
     noise_head_expansion: float = 4.0
 
-    # 평가 시 posterior 를 ★측정 전용★ 으로 계산해 transition 별 KL 을 기록한다.
-    # GRAM Eq 14 는 KL 을 마지막 transition 에만 걸므로(논문이 biased surrogate 로
-    # 명시) 앞쪽 transition 의 prior 가 미학습 상태로 남는지 실측하기 위한 것이다.
-    # False = 현행과 비트 단위 동일.
     diag_kl_per_transition: bool = False
 
-    # 학습 중 각 transition 에서 확률 ss_prob 로 posterior 대신 prior 를 쓴다.
-    # 학습은 posterior(정답 봄) / 추론은 prior(정답 없음) 라는 exposure bias 완화용.
-    # 0.0 = 현행과 비트 단위 동일 (torch.rand 호출 자체를 건너뛴다).
     ss_prob: float = 0.0
-    # SS 분기 전용 RNG 시드.  ★ rank 에 의존하면 안 된다 (아래 _ss_gen 주석 참조).
-    # 런처가 arch.ss_seed=${SEED} 로 넘겨 seed 별로 SS 패턴이 달라지게 한다.
     ss_seed: int = 0
 
-    # prior/post logvar head 에 더하는 학습가능 스칼라 bias 의 ★초기값★.
-    # logvar 이므로 sigma_init = exp(logvar_bias_init / 2) -- 0.0 이면 sigma 1.0,
-    # -4.0 이면 sigma 0.135 다.  0.0 = 현행과 비트 단위 동일.
     logvar_bias_init: float = 0.0
 
 
@@ -142,16 +120,13 @@ class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
         self.norm_eps = config.rms_norm_eps
 
     def forward(self, cos_sin: CosSin, hidden_states: torch.Tensor) -> torch.Tensor:
-        # Post Norm
         if self.config.mlp_t:
             hidden_states = hidden_states.transpose(1,2)
             out = self.mlp_t(hidden_states)
             hidden_states = rms_norm(hidden_states + out, variance_epsilon=self.norm_eps)
             hidden_states = hidden_states.transpose(1,2)
         else:
-            # Self Attention
             hidden_states = rms_norm(hidden_states + self.self_attn(cos_sin=cos_sin, hidden_states=hidden_states), variance_epsilon=self.norm_eps)
-        # Fully Connected
         out = self.mlp(hidden_states)
         hidden_states = rms_norm(hidden_states + out, variance_epsilon=self.norm_eps)
         return hidden_states
@@ -168,14 +143,12 @@ class TinyRecursiveReasoningModel_ACTV1ReasoningModule(nn.Module):
         return hidden_states
 
 
-# transition loop
 class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
     def __init__(self, config: TinyRecursiveReasoningModel_ACTV1Config) -> None:
         super().__init__()
         self.config = config
         self.forward_dtype = getattr(torch, self.config.forward_dtype)
 
-        # I/O
 
         self.embed_scale = math.sqrt(self.config.hidden_size)
         embed_init_std = 1.0 / self.embed_scale
@@ -186,11 +159,9 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
         self.puzzle_emb_len = -(self.config.puzzle_emb_ndim // -self.config.hidden_size)  if self.config.puzzle_emb_len == 0 else self.config.puzzle_emb_len  # ceil div
         if self.config.puzzle_emb_ndim > 0:
-            # Zero init puzzle embeddings
             self.puzzle_emb = CastedSparseEmbedding(self.config.num_puzzle_identifiers, self.config.puzzle_emb_ndim,
                                                     batch_size=self.config.batch_size, init_std=0, cast_to=self.forward_dtype)
 
-        # LM Blocks
         if self.config.pos_encodings == "rope":
             self.rotary_emb = RotaryEmbedding(dim=self.config.hidden_size // self.config.num_heads,
                                               max_position_embeddings=self.config.seq_len + self.puzzle_emb_len,
@@ -200,21 +171,15 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         else:
             pass
 
-        # Reasoning Layers
-        # FPRM 기여1: use_fp_transformer=True 면 pre-norm + residual scaling 블록으로 교체.
-        # import 는 분기 안에 둔다 -- False 인 기존 run 이 fp_* 파일 상태와 무관하게 돌아야 한다.
         if self.config.use_fp_transformer:
             from models.fp_transformer import FixedPointTransformer
             self.L_level = FixedPointTransformer(self.config, self.config.L_layers)
         else:
             self.L_level = TinyRecursiveReasoningModel_ACTV1ReasoningModule(layers=[TinyRecursiveReasoningModel_ACTV1Block(self.config) for _i in range(self.config.L_layers)])
 
-        # Initial states
         self.H_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
         self.L_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
 
-        # Q head special init
-        # Init Q to (almost) zero for faster learning during bootstrapping
         with torch.no_grad():
             self.q_head.weight.zero_()
             self.q_head.bias.fill_(-5)  # type: ignore
@@ -228,40 +193,22 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         self.post_logvar = SwiGLU(hidden_size=D, expansion=nh_exp)
         self.lrpm_head = CastedLinear(D, 1, bias=True)
 
-        # prior/posterior logvar 헤드에 더하는 학습가능 스칼라 bias.  초기값은
-        # config.logvar_bias_init (기본 0.0 = sigma 1.0 시작) 이다.  파라미터 자체는
-        # state_dict 키이자 GRAM 노이즈 head 의 일부다.
         _lv_init = float(self.config.logvar_bias_init)
         self.prior_logvar_bias = nn.Parameter(torch.tensor(_lv_init))
         self.post_logvar_bias = nn.Parameter(torch.tensor(_lv_init))
 
-        # Test-time sampled latent std 조정 (논문 Table 3 ablation; harness 의
-        # sigma_scale()/mu_scale() 컨텍스트가 이 속성을 바꾼다)
         self.sigma_scale = 1.0
 
-        # diag_kl_per_transition 누적기 (측정 전용).  forward 궤적과 무관하며
-        # 플래그가 꺼져 있으면 건드리지 않는다.  harness 가 reset -> rollout ->
-        # result 순으로 쓴다.
         self.diag_kl_sum: Dict[str, float] = {}
         self.diag_kl_n: int = 0
 
-        # [B] scheduled sampling 전용 RNG.
-        # ★★ rank 무관한 시드를 쓴다.  pretrain.py:607 이
-        #    torch.random.manual_seed(config.seed + RANK) 로 rank 마다 전역 시드를
-        #    다르게 주므로, 전역 RNG 로 분기를 뽑으면 rank 별로 posterior/prior 가
-        #    갈린다.  그러면 마지막 transition 이 prior 인 rank 에서만
-        #    post_mu/post_logvar 의 grad 가 없어 pretrain.py 의 수동 all_reduce
-        #    호출 집합이 어긋나고 NCCL 이 교착한다 (62번 실측: 4~6 step SIGABRT).
-        # ★ CPU generator 라 CUDA 스트림의 randn_like 소비에 끼어들지 않는다.
         self._ss_gen = torch.Generator()
         self._ss_gen.manual_seed(self.config.ss_seed * 1000003 + 777)
 
 
     def _input_embeddings(self, input: torch.Tensor, puzzle_identifiers: torch.Tensor):
-        # Token embedding
         embedding = self.embed_tokens(input.to(torch.int32))
 
-        # Puzzle embeddings
         if self.config.puzzle_emb_ndim > 0:
             puzzle_embedding = self.puzzle_emb(puzzle_identifiers)
             
@@ -271,20 +218,13 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
             embedding = torch.cat((puzzle_embedding.view(-1, self.puzzle_emb_len, self.config.hidden_size), embedding), dim=-2)
 
-        # Position embeddings
         if self.config.pos_encodings == "learned":
-            # scale by 1/sqrt(2) to maintain forward variance
             embedding = 0.707106781 * (embedding + self.embed_pos.embedding_weight.to(self.forward_dtype))
 
-        # Scale
         return self.embed_scale * embedding
 
 
     def _y_embeddings(self, labels):
-        # 사수 처방 4 (posterior 의 y-copy 통로 차단): y 는 학습된 embedding 조회가 아니라
-        # one-hot 을 zeropad 로 hidden_size 에 얹는다.  파라미터 0개, state_dict 무영향.
-        # 0.573 = 학습된 embed_tokens 노름(12.97) / ‖z_H‖(22.63) 실측 비율.
-        # one-hot 은 노름이 고정이라 학습으로 못 줄이므로 처음부터 맞춘 값.
         labels = torch.where(labels==IGNORE_LABEL_ID, 0, labels)
         oh = F.one_hot(labels.to(torch.int64), num_classes=self.config.vocab_size)
         embedding = F.pad(oh.to(self.forward_dtype),
@@ -408,15 +348,10 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         kl = self.kl_loss(mu_q, logvar_q, mu_p, logvar_p)
         std_q = torch.exp(0.5 * logvar_q.float())
         dst[f"diag/kl_t{t}"] = kl.sum(-1).sum(-1).mean()
-        # 두 축을 병기한다.  *_norm 은 per-position L2(D축) 뒤 나머지 축 평균,
-        # *_absmean/*_mean 은 (B,L,D) 전체 element 평균이다.  두 축은 sqrt(D) 만큼
-        # 눈금이 다르므로 인용 시 어느 축인지 밝힐 것.
         dst[f"diag/eps_mu_norm_t{t}"] = mu_q.float().norm(dim=-1).mean()
         dst[f"diag/eps_std_norm_t{t}"] = std_q.norm(dim=-1).mean()
         dst[f"diag/eps_mu_absmean_t{t}"] = mu_q.float().abs().mean()
         dst[f"diag/eps_std_mean_t{t}"] = std_q.mean()
-        # 차원(D) 간 표준편차.  역산이 아니라 직접 계산한다 -- sigma 가 D 축에서
-        # 균일한지(head 가 죽어 상수를 뱉는지) 를 mean 과 분리해 보기 위한 축.
         dst[f"diag/eps_std_dimstd_t{t}"] = std_q.std(dim=-1).mean()
 
 
@@ -440,9 +375,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
         y_emb = self._y_embeddings(batch["labels"]) if use_posterior else None
 
-        # 진단 B+ (측정 전용).  평가 시엔 use_posterior=False 라 y_emb 가 None 이므로
-        # 여기서 label 을 따로 읽는다.  ★ 궤적에는 절대 쓰지 않는다.
-        # [1] 학습 중 σ 관측 (기본 on).  posterior 분기에서만 채워진다.
         train_diag = {} if use_posterior else None
 
         diag_kl_dst = None
@@ -455,15 +387,12 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             cos_sin=self.rotary_emb() if hasattr(self, "rotary_emb") else None,
         )
 
-        # Input encoding
         input_embeddings = self._input_embeddings(batch["inputs"], batch["puzzle_identifiers"])
 
-        # Forward iterations
         it = 0
         z_H, z_L = carry.z_H, carry.z_L
         lrpm_z = []
 
-        # H_cycles-1 without grad
         with torch.no_grad():
             for _H_step in range(self.config.H_cycles-1):
                 t = _H_step + 1                     # 1-based transition 번호
@@ -481,8 +410,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                 logvar_p = self.prior_logvar(z_H) + self.prior_logvar_bias
 
                 if self._use_posterior_this_transition(use_posterior):
-                    # KL 페널티는 마지막(grad) transition 에만 걸린다 (Eq 14) --
-                    # 여기 no-grad transition 들은 샘플만 뽑는다.
                     u_y = z_H + y_emb
                     mu_q = self.post_mu(u_y)
                     logvar_q = self.post_logvar(u_y) + self.post_logvar_bias
@@ -492,15 +419,12 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                 else:
                     eps = self.reparameterize(mu_p, logvar_p)
 
-                # ★ eps 를 뽑은 뒤에 잰다 -- 난수 스트림에 끼어들지 않음을 눈으로
-                #   확인할 수 있게. (_record_diag_kl 자체는 RNG 를 안 쓴다)
                 if diag_kl_dst is not None:
                     self._record_diag_kl(t, z_H, diag_kl_y, mu_p, logvar_p, diag_kl_dst)
 
                 z_H = z_H + self.config.eps_scale * eps
                 lrpm_z.append(z_H[:, 0])
 
-        # 1 with grad
         for _L_step in range(self.config.L_cycles):
             z_tilde = self.L_level(z_L, z_H + input_embeddings, **seq_info)
             if self.config.damping_eta != 1.0:
@@ -514,8 +438,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         mu_p = self.prior_mu(z_H)
         logvar_p = self.prior_logvar(z_H) + self.prior_logvar_bias
 
-        # ★ [B] 마지막 transition 도 scheduled sampling 대상이다.  prior 로 뽑히면
-        #   q=p 라 KL 이 0 이므로 항 자체를 뺀다 (kl=None -> losses.py 가 0 처리).
         use_post_last = self._use_posterior_this_transition(use_posterior)
         if use_post_last:
             u_y = z_H + y_emb
@@ -530,18 +452,11 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             eps = self.reparameterize(mu_p, logvar_p)
             kl = None
 
-        # Logging-only; posterior path (= training) only, so eval stays untouched.
-        # ss_prob=0.0 이면 use_post_last == use_posterior 라 기존과 동일하다.
         diag = self._latent_diag(z_H, z_L, mu_q, logvar_q) if use_post_last else None
 
-        # [1] transition 별 학습 diag 를 같은 채널에 얹는다 (losses.py:113-114 ->
-        #     pretrain.py:355-358 의 diag/ 규약).  ss_prob>0 로 prior 가 뽑힌
-        #     transition 은 mu_q 가 없어 그 t 의 키가 빠진다.
         if train_diag:
             diag = {**diag, **train_diag} if diag is not None else dict(train_diag)
 
-        # 마지막(grad) transition 도 같이 잰다 -- 이 자리만 KL 을 학습받으므로
-        # 앞쪽 t 의 미학습 여부를 판정하려면 기준점이 필요하다.
         if diag_kl_dst is not None:
             self._record_diag_kl(self.config.H_cycles, z_H, diag_kl_y, mu_p, logvar_p, diag_kl_dst)
             self._diag_kl_accumulate(diag_kl_dst)
@@ -551,7 +466,6 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         lrpm_z.append(z_H[:, 0])
 
 
-        # LM Outputs
         new_carry = TinyRecursiveReasoningModel_ACTV1InnerCarry(z_H=z_H.detach(), z_L=z_L.detach())  # New carry no grad
         output = self.lm_head(z_H)[:, self.puzzle_emb_len:]
 
@@ -586,14 +500,12 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
         
     def forward(self, carry: TinyRecursiveReasoningModel_ACTV1Carry, batch: Dict[str, torch.Tensor], use_posterior: Optional[bool] = None) -> Tuple[TinyRecursiveReasoningModel_ACTV1Carry, Dict[str, torch.Tensor]]:
 
-        # Update data, carry (removing halted sequences)
         new_inner_carry = self.inner.reset_carry(carry.halted, carry.inner_carry)
         
         new_steps = torch.where(carry.halted, 0, carry.steps)
 
         new_current_data = {k: torch.where(carry.halted.view((-1, ) + (1, ) * (batch[k].ndim - 1)), batch[k], v) for k, v in carry.current_data.items()}
 
-        # Forward inner model
         new_inner_carry, logits, (q_halt_logits, q_continue_logits), kl, lrpm_logits, diag = self.inner(new_inner_carry, new_current_data, use_posterior=use_posterior)
 
         outputs = {
@@ -606,37 +518,27 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
         if kl is not None:
             outputs["kl"] = kl
 
-        # metrics-only side channel (dict of scalars); never a loss term
         if diag is not None:
             outputs["diag"] = diag
 
         with torch.no_grad():
-            # Step
             new_steps = new_steps + 1
             is_last_step = new_steps >= self.config.halt_max_steps
             
             halted = is_last_step
 
-            # if training, and ACT is enabled
             if self.training and (self.config.halt_max_steps > 1):
 
-                # Halt signal
-                # NOTE: During evaluation, always use max steps, this is to guarantee the same halting steps inside a batch for batching purposes
                 
                 if self.config.no_ACT_continue:
                     halted = halted | (q_halt_logits > 0)
                 else:
                     halted = halted | (q_halt_logits > q_continue_logits)
 
-                # Exploration
                 min_halt_steps = (torch.rand_like(q_halt_logits) < self.config.halt_exploration_prob) * torch.randint_like(new_steps, low=2, high=self.config.halt_max_steps + 1)
                 halted = halted & (new_steps >= min_halt_steps)
 
                 if not self.config.no_ACT_continue:
-                    # Compute target Q
-                    # NOTE: No replay buffer and target networks for computing target Q-value.
-                    # As batch_size is large, there're many parallel envs.
-                    # Similar concept as PQN https://arxiv.org/abs/2407.04811
                     _, _, (next_q_halt_logits, next_q_continue_logits), _, _, _ = self.inner(new_inner_carry, new_current_data, use_posterior=use_posterior)
                     outputs["target_q_continue"] = torch.sigmoid(torch.where(is_last_step, next_q_halt_logits, torch.maximum(next_q_halt_logits, next_q_continue_logits)))
 
