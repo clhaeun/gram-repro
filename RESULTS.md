@@ -7,7 +7,7 @@ Selected findings from the GRAM reproduction experiments.
 | N-Queens 8×8 | [Evaluation JSON](experiments/results/band_nq8_v2_base_b500_s0_live_s0.json) | Multiple-sample inference; raw checkpoint |
 | N-Queens 10×10 | [Evaluation JSON](experiments/results/nq10_nq10_on_b520_s0_live_s0.json) | Separate experiment configuration and evaluation |
 | Graph Coloring 8 | [Evaluation JSON](experiments/results/v5gc8_gc8_v5_catnd_s0_step_58311_live_s0.json) | Multi-sample evaluation |
-| Sudoku | [Diagnostic JSON](experiments/results/ema_test_sudoku_RAW.json) | EMA/raw investigation; not a final headline accuracy |
+| Sudoku | [Diagnostic JSON](experiments/results/ema_test_sudoku_RAW.json) | EMA/raw investigation |
 
 ## Findings
 
@@ -15,9 +15,3 @@ Selected findings from the GRAM reproduction experiments.
 - Posterior-based diagnostics could look strong even when prior sampling performed poorly.
 - EMA and raw checkpoints sometimes produced markedly different evaluation results.
 - Latent noise affected the diversity and success of repeated inference.
-
-## Limitations
-
-These are selected historical result files, not a complete independent reproduction package. Most original checkpoints and generated datasets are not included, so these results cannot be fully re-evaluated from this repository alone.
-
-This repository builds on [TinyRecursiveModels](https://github.com/SamsungSAILMontreal/TinyRecursiveModels).
