@@ -1,27 +1,26 @@
 # GRAM Reproduction
 
-Reproduction and analysis of GRAM based on the [TinyRecursiveModels](https://github.com/SamsungSAILMontreal/TinyRecursiveModels) codebase.
+Reproduction and analysis of GRAM based on [TinyRecursiveModels](https://github.com/SamsungSAILMontreal/TinyRecursiveModels).
 
-Experiments on N-Queens, Graph Coloring, and Sudoku focused on implementation choices and evaluation behavior.
+Experiments cover N-Queens, Graph Coloring, and Sudoku, focusing on implementation choices, stochastic inference, and evaluation.
 
 ## Work
 
-- Implemented the GRAM model and training/evaluation pipeline.
-- Analyzed the effects of KL reduction, latent noise, and EMA evaluation.
-- Compared single-sample and multi-sample inference, including coverage and majority voting.
+- Reproduced the GRAM model and training/evaluation pipeline.
+- Investigated KL reduction, latent noise, and EMA/raw checkpoint behavior.
+- Compared single-sample and multi-sample evaluation.
 
 ## Code
 
-- [GRAM model](models/recursive_reasoning/gram.py)
-- [Training](pretrain.py) · [Configurations](config/arch/)
-- [Dataset generation](dataset/) · [Evaluators](evaluators/)
-- [N-Queens evaluation](experiments/sweep_harness.py) · [Graph Coloring evaluation](experiments/gc_harness.py) · [Sudoku evaluation](experiments/sudoku_harness.py)
+- [GRAM model](models/recursive_reasoning/gram.py) · [Training](pretrain.py)
+- [Configurations](config/arch/) · [Datasets](dataset/) · [Evaluators](evaluators/)
+- [N-Queens](experiments/sweep_harness.py) · [Graph Coloring](experiments/gc_harness.py) · [Sudoku](experiments/sudoku_harness.py)
 
 ## Results
 
-Experimental findings and detailed measurements are recorded in [REPORT_FINAL.md](REPORT_FINAL.md), with supporting JSON files in [experiments/results/](experiments/results/).
+See [RESULTS.md](RESULTS.md) for selected findings and [experiments/results/](experiments/results/) for example evaluation outputs.
 
-Model checkpoints and generated datasets are not included in this repository.
+Checkpoints and generated datasets are not included. The result JSON files document previous evaluations and are not sufficient on their own to rerun training.
 
 ## Reference
 

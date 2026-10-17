@@ -1,9 +1,0 @@
-{
-  "data": "data/sudoku-extreme-1k-aug-1000/test",
-  "n": 4000,
-  "selection": "contiguous prefix rows [0, 4000)",
-  "reproduce": "experiments/sudoku_harness.py --limit 4000 (shard-index 0 / shard-count 1); np.linspace(0,4000,2)=[0,4000]. \ub09c\uc218 \uc5c6\uc74c -- seed \ubb34\uad00.",
-  "index_file": "reports/sudoku/sweep_index_n4000.npy",
-  "md5_inputs_subset_12": "9bb82c414a70",
-  "md5_full_test_inputs_12": "c71fb061ea9f"
-}
