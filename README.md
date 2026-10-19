@@ -1,27 +1,36 @@
 # GRAM Reproduction
 
-Reproduction and analysis of GRAM based on [TinyRecursiveModels](https://github.com/SamsungSAILMontreal/TinyRecursiveModels).
+Reproduction and experimental analysis of GRAM, built from the [TinyRecursiveModels](https://github.com/SamsungSAILMontreal/TinyRecursiveModels) codebase. This project was conducted during a research internship at KAIST MLML.
 
-Experiments cover N-Queens, Graph Coloring, and Sudoku, focusing on implementation choices, stochastic inference, and evaluation.
+The work focuses on **reproduction and diagnosis**, rather than proposing a new reasoning model.
 
-## Work
+## Questions investigated
 
-- Reproduced the GRAM model and training/evaluation pipeline.
-- Investigated KL reduction, latent noise, and EMA/raw checkpoint behavior.
-- Compared single-sample and multi-sample evaluation.
+- How do implementation choices left underspecified in the paper, including KL reduction and its scaling, affect training?
+- How do latent noise and multiple inference samples influence valid solutions and solution coverage?
+- How do prior-based evaluation and posterior diagnostics differ?
+- When do raw and EMA checkpoints give different evaluation results?
 
-## Code
+Experiments cover N-Queens, Graph Coloring, and Sudoku. Reported observations apply to the configurations and evaluations used in this reproduction, not necessarily to GRAM in general.
 
-- [GRAM model](models/recursive_reasoning/gram.py) · [Training](pretrain.py)
-- [Configurations](config/arch/) · [Datasets](dataset/) · [Evaluators](evaluators/)
-- [N-Queens](experiments/sweep_harness.py) · [Graph Coloring](experiments/gc_harness.py) · [Sudoku](experiments/sudoku_harness.py)
+## Implementation
+
+| Component | Source |
+| --- | --- |
+| Model | [`models/recursive_reasoning/gram.py`](models/recursive_reasoning/gram.py) |
+| Training | [`pretrain.py`](pretrain.py) |
+| Configurations | [`config/arch/`](config/arch/) |
+| Dataset generation and evaluation | [`dataset/`](dataset/), [`evaluators/`](evaluators/) |
+| Experiment harnesses | [N-Queens](experiments/sweep_harness.py), [Graph Coloring](experiments/gc_harness.py), [Sudoku](experiments/sudoku_harness.py) |
 
 ## Results
 
-See [RESULTS.md](RESULTS.md) for selected findings and [experiments/results/](experiments/results/) for example evaluation outputs.
+[Selected observations and evaluation outputs](RESULTS.md) · [Representative JSON files](experiments/results/)
 
-Checkpoints and generated datasets are not included. The result JSON files document previous evaluations and are not sufficient on their own to rerun training.
+The reproduction exposed sensitivity to several implementation choices and differences between sample generation and candidate selection. Some comparisons with published numbers use different checkpoint/seed selection or unresolved metric conventions; see the notes accompanying each result before treating values as directly comparable.
+
+Checkpoints and generated training datasets are not included, so the selected JSON outputs **do not** constitute a complete end-to-end reproduction package.
 
 ## Reference
 
-[TinyRecursiveModels](https://github.com/SamsungSAILMontreal/TinyRecursiveModels)
+[SamsungSAILMontreal/TinyRecursiveModels](https://github.com/SamsungSAILMontreal/TinyRecursiveModels)
